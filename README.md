@@ -9,7 +9,7 @@ pnpm install
 pnpm start
 ```
 
-Mở `http://localhost:4200/`. Để trải nghiệm nhanh, tại màn hình đăng nhập chọn **Vào vai giáo viên** hoặc **Vào vai admin**. Đây là tài khoản demo phía giao diện; khi triển khai thật cần thay bằng Firebase Authentication.
+Mở `http://localhost:4200/`. Đăng nhập bằng số điện thoại/email và mật khẩu của trường để tiếp tục.
 
 ## Build production
 
