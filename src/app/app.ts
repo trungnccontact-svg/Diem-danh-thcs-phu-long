@@ -423,6 +423,7 @@ export class App implements OnInit, OnDestroy {
       } else {
         this.loginError.set('Đăng nhập thất bại: ' + err.message);
       }
+      this.loading.set(false);
     }
   }
 
