@@ -81,6 +81,9 @@ export class App implements OnInit, OnDestroy {
   protected readonly submitted = signal(false);
   protected readonly showChat = signal(false);
   protected readonly loading = signal(true);
+  protected readonly cooldownTime = signal(0);
+  private failedAttempts = 0;
+  private cooldownInterval: any = null;
 
   // Thông tin User đăng nhập
   protected currentUser = signal<User | null>(null);
@@ -219,6 +222,9 @@ export class App implements OnInit, OnDestroy {
 
   ngOnDestroy() {
     this.clearListeners();
+    if (this.cooldownInterval) {
+      clearInterval(this.cooldownInterval);
+    }
   }
 
   protected changeSession(session: 'morning' | 'afternoon') {
@@ -364,7 +370,29 @@ export class App implements OnInit, OnDestroy {
     this.dbListeners = [];
   }
 
+  private startCooldown(seconds: number) {
+    this.cooldownTime.set(seconds);
+    if (this.cooldownInterval) {
+      clearInterval(this.cooldownInterval);
+    }
+    this.cooldownInterval = setInterval(() => {
+      const current = this.cooldownTime();
+      if (current <= 1) {
+        this.cooldownTime.set(0);
+        clearInterval(this.cooldownInterval);
+        this.cooldownInterval = null;
+      } else {
+        this.cooldownTime.set(current - 1);
+      }
+    }, 1000);
+  }
+
   async login() {
+    if (this.cooldownTime() > 0) {
+      this.loginError.set(`Bạn đã thử quá nhiều lần. Vui lòng thử lại sau ${this.cooldownTime()} giây.`);
+      return;
+    }
+
     const inputVal = this.phone.trim();
     if (!inputVal || !this.password.trim()) {
       this.loginError.set('Vui lòng nhập đầy đủ thông tin đăng nhập và mật khẩu.');
@@ -410,6 +438,8 @@ export class App implements OnInit, OnDestroy {
 
       await signInWithEmailAndPassword(this.auth, loginEmail, this.password);
 
+      this.failedAttempts = 0;
+
       // Lưu hoặc xóa thông tin đăng nhập theo lựa chọn
       if (this.rememberMe) {
         localStorage.setItem('phulong_remember', JSON.stringify({ phone: this.phone, password: this.password }));
@@ -418,7 +448,13 @@ export class App implements OnInit, OnDestroy {
       }
     } catch (err: any) {
       console.error(err);
-      if (err.code === 'auth/invalid-credential' || err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password') {
+      this.failedAttempts++;
+
+      if (err.code === 'auth/too-many-requests' || this.failedAttempts >= 5) {
+        const waitTime = err.code === 'auth/too-many-requests' ? 60 : 30;
+        this.startCooldown(waitTime);
+        this.loginError.set(`Đăng nhập thất bại quá nhiều lần. Vui lòng thử lại sau ${waitTime} giây.`);
+      } else if (err.code === 'auth/invalid-credential' || err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password') {
         this.loginError.set('Tài khoản hoặc mật khẩu không chính xác.');
       } else {
         this.loginError.set('Đăng nhập thất bại: ' + err.message);
