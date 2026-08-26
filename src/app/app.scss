@@ -223,13 +223,65 @@ nav button em { font-style:normal; font-size:8px; background:#d8f2ed; color:#168
 .field-label { max-width:350px; margin-top:16px; }
 
 /* Attendance fields */
-.attendance-fields { display:flex; gap:12px; align-items:flex-end; margin-top:16px; flex-wrap:wrap; }
-.attendance-fields label { flex:1; min-width:80px; }
-.attendance-fields span { padding-bottom:12px; color:#aab3bf; font-weight:700; }
+.attendance-fields { display:flex; gap:16px; align-items:flex-end; margin-top:16px; flex-wrap:wrap; }
+.attendance-fields label {
+  flex:1;
+  min-width:140px;
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  color:#40516b;
+  font-size:13px;
+  font-weight:700;
+}
+.attendance-fields label input {
+  width:100%;
+  padding:14px 16px;
+  font-size:18px;
+  font-weight:700;
+  color:#1b3150;
+  border-radius:12px;
+  border:1.5px solid #d0dbe8;
+  text-align:center;
+  background:#f8fafc;
+  outline:none;
+  transition:.15s;
+}
+.attendance-fields label input:focus {
+  border-color:#0c9295;
+  background:#fff;
+  box-shadow:0 0 0 3px #0c929518;
+}
+.attendance-fields label input[readonly] {
+  background:#f0f4f8;
+  color:#8fa0b5;
+  border-color:#dde4ed;
+}
+.attendance-fields > span { padding-bottom:16px; color:#aab3bf; font-weight:700; font-size:24px; }
 
-.absent-inputs { margin-top:16px; }
-.absent-inputs p { font-size:12px; color:#6b7e96; margin-bottom:10px; font-weight:600; }
-.absent-inputs input { margin-bottom:8px; border-radius:9px; padding:11px 12px; font-size:13px; }
+.absent-inputs { 
+  margin-top:20px; 
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+}
+.absent-inputs p { font-size:13px; color:#40516b; margin-bottom:4px; font-weight:700; grid-column: 1 / -1; }
+.absent-inputs input { 
+  width: 100%;
+  border: 1.5px solid #d0dbe8;
+  border-radius: 12px;
+  padding: 13px 16px;
+  outline: none;
+  color: #1b3150;
+  background: #fff;
+  font: inherit;
+  font-size: 14px;
+  transition: .15s;
+}
+.absent-inputs input:focus {
+  border-color:#0c9295;
+  box-shadow:0 0 0 3px #0c929518;
+}
 
 .card-actions { display:flex; justify-content:flex-end; gap:9px; margin-top:20px; }
 

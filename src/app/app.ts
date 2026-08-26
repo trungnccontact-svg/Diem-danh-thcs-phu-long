@@ -18,6 +18,8 @@ interface TeacherData {
   className?: string;
   email: string;
   role: Role;
+  isTestAccount?: boolean;  // tài khoản test: bỏ qua ràng buộc thời gian điểm danh
+  viewOnlyUids?: string[];  // admin test: chỉ hiển thị các teacher trong danh sách này
 }
 
 interface AttendanceRecord {
@@ -231,6 +233,11 @@ export class App implements OnInit, OnDestroy {
   }
 
   protected getTimeStatus(session: 'morning' | 'afternoon'): { allowed: boolean; message: string } {
+    // Tài khoản test không bị ràng buộc thời gian điểm danh
+    if (this.currentUserProfile()?.isTestAccount) {
+      return { allowed: true, message: 'Tài khoản test: không giới hạn thời gian điểm danh.' };
+    }
+
     const now = new Date();
     const hours = now.getHours();
     const minutes = now.getMinutes();
@@ -270,6 +277,10 @@ export class App implements OnInit, OnDestroy {
     this.clearListeners();
 
     // 1. Đồng bộ danh sách tất cả giáo viên (chỉ lấy role teacher để hiển thị tại admin)
+    //    Nếu admin có viewOnlyUids thì chỉ lấy các teacher trong danh sách đó
+    const adminProfile = this.currentUserProfile();
+    const viewOnlyUids: string[] | undefined = adminProfile?.viewOnlyUids;
+
     const usersRef = ref(this.db, 'users');
     const usersCallback = onValue(usersRef, (snapshot) => {
       const teachersList: TeacherData[] = [];
@@ -277,12 +288,17 @@ export class App implements OnInit, OnDestroy {
         snapshot.forEach((child) => {
           const val = child.val();
           if (val.role === 'teacher') {
+            // Nếu admin có viewOnlyUids, chỉ hiển thị teacher nằm trong danh sách đó
+            if (viewOnlyUids && viewOnlyUids.length > 0 && !viewOnlyUids.includes(child.key!)) {
+              return;
+            }
             teachersList.push({
               uid: child.key!,
               name: val.name,
               phone: val.phone,
               email: val.email,
-              role: val.role
+              role: val.role,
+              isTestAccount: val.isTestAccount ?? false
             });
           }
         });
