@@ -1,0 +1,16 @@
+{
+  "name": "Phú Long — Điểm danh",
+  "short_name": "Phú Long",
+  "description": "Hệ thống điểm danh học sinh Trường THCS Phú Long",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f6f8fb",
+  "theme_color": "#10345d",
+  "lang": "vi",
+  "icons": [{
+    "src": "school-gate.jpg",
+    "sizes": "2048x1536",
+    "type": "image/jpeg",
+    "purpose": "any"
+  }]
+}

@@ -1,0 +1,48 @@
+const { onSchedule } = require('firebase-functions/v2/scheduler');
+const { onRequest } = require('firebase-functions/v2/https');
+const { defineSecret } = require('firebase-functions/params');
+const { initializeApp } = require('firebase-admin/app');
+const { getMessaging } = require('firebase-admin/messaging');
+const { getDatabase } = require('firebase-admin/database');
+
+initializeApp();
+const openRouterKey = defineSecret('OPENROUTER_API_KEY');
+
+const reminders = [
+  { schedule: '50 6 * * *', title: 'SẮP TỚI GIỜ ĐIỂM DANH TIẾT 1 BUỔI SÁNG', body: 'Vui lòng chuẩn bị điểm danh lớp học.' },
+  { schedule: '40 7 * * *', title: 'SẮP HẾT GIỜ ĐIỂM DANH TIẾT 1 BUỔI SÁNG', body: 'Hãy hoàn tất dữ liệu điểm danh.' },
+  { schedule: '10 13 * * *', title: 'SẮP TỚI GIỜ ĐIỂM DANH TIẾT 1 BUỔI CHIỀU', body: 'Vui lòng chuẩn bị điểm danh lớp học.' },
+  { schedule: '55 13 * * *', title: 'SẮP HẾT GIỜ ĐIỂM DANH TIẾT 1 BUỔI CHIỀU', body: 'Hãy hoàn tất dữ liệu điểm danh.' }
+];
+
+async function sendReminder(title, body) {
+  const snapshot = await getDatabase().ref('users').orderByChild('fcmToken').once('value');
+  const tokens = [];
+  snapshot.forEach(child => { if (child.val()?.fcmToken) tokens.push(child.val().fcmToken); });
+  if (!tokens.length) return { sent: 0 };
+  const response = await getMessaging().sendEachForMulticast({ tokens, notification: { title, body }, data: { type: 'attendance-reminder' }, android: { notification: { sound: 'default', channelId: 'attendance-reminders' } } });
+  return { sent: response.successCount, failed: response.failureCount };
+}
+
+reminders.forEach((item, index) => {
+  exports[`attendanceReminder${index + 1}`] = onSchedule({ schedule: item.schedule, timeZone: 'Asia/Ho_Chi_Minh' }, async () => sendReminder(item.title, item.body));
+});
+
+exports.askAssistant = onRequest({ secrets: [openRouterKey], cors: true }, async (req, res) => {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  if (!req.body?.message) return res.status(400).json({ error: 'message is required' });
+  const key = openRouterKey.value();
+  if (!key) return res.status(503).json({ error: 'AI service is not configured' });
+  const prompt = `Bạn là trợ lý Phú Long trong môi trường trường THCS. Chỉ trả lời lịch sự, an toàn, phù hợp giáo dục và hỗ trợ nghiệp vụ giáo viên. Câu hỏi: ${String(req.body.message).slice(0, 2000)}`;
+  const models = ['openrouter/free', 'meta-llama/llama-3.3-8b-instruct:free'];
+  for (const model of models) {
+    try {
+      const response = await fetch('https://openrouter.ai/api/v1/chat/completions', { method: 'POST', headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json', 'HTTP-Referer': 'https://diem-danh-hoc-sinh-thcs-pl.web.app' }, body: JSON.stringify({ model, messages: [{ role: 'user', content: prompt }], temperature: 0.3 }) });
+      if (response.ok) {
+        const data = await response.json();
+        return res.json({ answer: data.choices?.[0]?.message?.content || 'Tôi chưa có câu trả lời phù hợp.', model });
+      }
+    } catch (_) { /* tiếp tục model fallback */ }
+  }
+  return res.status(503).json({ error: 'AI providers unavailable' });
+});

@@ -1,0 +1,19 @@
+{
+  "rules": {
+    ".read": "auth != null",
+    ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() == 'admin' || newData.child('teacherUid').val() == auth.uid)",
+    "users": {
+      "$uid": {
+        ".read": "auth != null && (auth.uid == $uid || root.child('users').child(auth.uid).child('role').val() == 'admin')",
+        ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() == 'admin'"
+      }
+    },
+    "attendance": {
+      "$date": {
+        "$teacherUid": {
+          ".validate": "newData.hasChildren(['teacherUid','teacherName','className','present','total','absentNames','checkedAt']) && newData.child('teacherUid').val() == $teacherUid && newData.child('present').isNumber() && newData.child('total').isNumber() && newData.child('present').val() >= 0 && newData.child('present').val() <= newData.child('total').val()"
+        }
+      }
+    }
+  }
+}
