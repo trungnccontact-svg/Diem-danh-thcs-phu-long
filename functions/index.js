@@ -16,11 +16,52 @@ const reminders = [
 ];
 
 async function sendReminder(title, body) {
-  const snapshot = await getDatabase().ref('users').orderByChild('fcmToken').once('value');
-  const tokens = [];
-  snapshot.forEach(child => { if (child.val()?.fcmToken) tokens.push(child.val().fcmToken); });
+  // Đọc FCM token từ node 'fcmTokens/<userId>/token' (được lưu bởi NotificationService)
+  const db = getDatabase();
+  const snapshot = await db.ref('fcmTokens').once('value');
+
+  // Tạo map: token → uid để dọn token hết hạn sau khi gửi
+  const tokenMap = {}; // token -> uid
+  snapshot.forEach(child => {
+    const val = child.val();
+    if (val?.token) tokenMap[val.token] = child.key;
+  });
+  const tokens = Object.keys(tokenMap);
+
+  // Fallback: cũng kiểm tra node 'users' nếu có fcmToken cũ
+  if (!tokens.length) {
+    const usersSnap = await db.ref('users').orderByChild('fcmToken').once('value');
+    usersSnap.forEach(child => { if (child.val()?.fcmToken) tokens.push(child.val().fcmToken); });
+  }
+
   if (!tokens.length) return { sent: 0 };
-  const response = await getMessaging().sendEachForMulticast({ tokens, notification: { title, body }, data: { type: 'attendance-reminder' }, android: { notification: { sound: 'default', channelId: 'attendance-reminders' } } });
+
+  const response = await getMessaging().sendEachForMulticast({
+    tokens,
+    notification: { title, body },
+    data: { type: 'attendance-reminder' },
+    android: { notification: { sound: 'default', channelId: 'attendance-reminders' } },
+    webpush: {
+      notification: {
+        sound: '/notification-sound.mp3'
+      }
+    }
+  });
+
+  // Tự động xóa token hết hạn (NotRegistered, InvalidRegistration)
+  const INVALID_ERRORS = ['messaging/registration-token-not-registered', 'messaging/invalid-registration-token'];
+  const cleanupPromises = [];
+  response.responses.forEach((r, i) => {
+    if (!r.success && INVALID_ERRORS.includes(r.error?.code)) {
+      const uid = tokenMap[tokens[i]];
+      if (uid) {
+        console.log(`[FCM] Xóa token hết hạn của uid: ${uid}`);
+        cleanupPromises.push(db.ref(`fcmTokens/${uid}`).remove());
+      }
+    }
+  });
+  await Promise.all(cleanupPromises);
+
   return { sent: response.successCount, failed: response.failureCount };
 }
 

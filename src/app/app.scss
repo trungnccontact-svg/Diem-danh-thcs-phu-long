@@ -18,7 +18,8 @@
 /* Brand */
 .brand-mark { display:flex; align-items:center; gap:10px; font-weight:900; letter-spacing:.08em; font-size:15px; color:#10294c; }
 .brand-sub { display:block; font-size:9px; color:#6b829f; letter-spacing:.2em; margin-top:2px; }
-.brand-icon { width:34px; height:34px; display:grid; place-items:center; border-radius:11px; background:#0e8f91; color:white; font-weight:900; font-size:22px; box-shadow:0 7px 16px #0e8f9140; flex-shrink:0; }
+.brand-icon { width:34px; height:34px; display:grid; place-items:center; border-radius:11px; background:transparent; color:white; font-weight:900; font-size:22px; box-shadow:0 7px 16px #0e8f9140; flex-shrink:0; overflow:hidden; }
+.brand-icon img { width:100%; height:100%; object-fit:cover; border-radius:11px; display:block; }
 
 /* Login headings */
 .login-heading { margin:32px 0 22px; }
@@ -133,7 +134,8 @@
 /* ===== SIDEBAR ===== */
 .sidebar { width:235px; background:#fff; border-right:1px solid #e8edf3; padding:24px 14px 16px; display:flex; flex-direction:column; flex-shrink:0; }
 .school-mini { gap:10px; padding:0 10px 28px; }
-.school-emblem { width:38px; height:38px; border-radius:12px; background:#102d53; color:#fff; display:grid; place-items:center; font-weight:900; font-size:13px; flex-shrink:0; }
+.school-emblem { width:38px; height:38px; border-radius:12px; background:transparent; color:#fff; display:grid; place-items:center; font-weight:900; font-size:13px; flex-shrink:0; overflow:hidden; box-shadow:0 2px 8px rgba(0,0,0,.15); }
+.school-emblem img { width:100%; height:100%; object-fit:cover; border-radius:12px; display:block; }
 .school-mini strong, .school-mini small { display:block; }
 .school-mini strong { font-size:12px; }
 .school-mini small { font-size:10px; color:#99a6b7; margin-top:4px; }
@@ -144,6 +146,31 @@ nav button { display:flex; align-items:center; gap:12px; width:100%; padding:12p
 nav button span { width:17px; text-align:center; font-size:15px; flex-shrink:0; }
 nav button.active { color:#087f83; background:#eaf8f7; font-weight:800; }
 nav button em { font-style:normal; font-size:8px; background:#d8f2ed; color:#168a7d; padding:3px 5px; border-radius:5px; margin-left:auto; }
+
+.sidebar-noti-btn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: calc(100% - 10px);
+  padding: 12px 13px;
+  border: 1.5px solid #ff9800;
+  background: #fff9c4;
+  color: #e65100;
+  border-radius: 9px;
+  text-align: left;
+  font-size: 11px;
+  font-weight: bold;
+  cursor: pointer;
+  margin: 12px 5px 2px;
+  transition: .15s;
+}
+.sidebar-noti-btn:hover {
+  background: #fff59d;
+  transform: translateY(-1px);
+}
+.sidebar-noti-btn span {
+  font-size: 14px;
+}
 
 .sidebar-bottom { margin-top:auto; gap:9px; border-top:1px solid #edf0f4; padding:16px 10px 0; }
 .sidebar-bottom strong, .sidebar-bottom small { display:block; }
@@ -216,10 +243,6 @@ nav button em { font-style:normal; font-size:8px; background:#d8f2ed; color:#168
 .card-content h2 { font-family:Georgia,serif; font-size:21px; margin:0 0 8px; color:#1b3150; }
 
 /* Suggestions */
-.suggestions { display:flex; gap:8px; margin:20px 0 4px; flex-wrap:wrap; }
-.suggestions button { min-width:80px; border:1.5px solid #dce5eb; background:#fff; border-radius:10px; padding:10px 12px; text-align:left; color:#25405e; font-weight:800; cursor:pointer; transition:.15s; font-size:13px; }
-.suggestions button.selected { border-color:#0c9998; background:#ecfafa; color:#087d80; }
-.suggestions small { display:block; color:#93a2b2; font-size:9px; font-weight:500; margin-top:4px; }
 .field-label { max-width:350px; margin-top:16px; }
 
 /* Attendance fields */
@@ -552,9 +575,6 @@ td { border-top:1px solid #eef1f4; padding:13px 16px; font-size:11px; color:#526
   }
 
   /* Suggestions wrap nicely */
-  .suggestions { flex-wrap:wrap; gap:8px; }
-  .suggestions button { min-width:calc(33% - 6px); flex:1; }
-
   /* Card actions – full width submit */
   .card-actions { flex-direction:column-reverse; gap:8px; }
   .card-actions .primary-button { width:100%; justify-content:center; padding:15px; font-size:14px; }
@@ -617,6 +637,14 @@ td { border-top:1px solid #eef1f4; padding:13px 16px; font-size:11px; color:#526
   .login-heading h1 { font-size:26px; }
   .quick-stats { grid-template-columns:1fr 1fr; }
   .quick-stats > div:last-child { grid-column:1 / -1; flex-direction:row; }
-  .suggestions button { min-width:calc(50% - 4px); }
+}
+
+.error-message-below {
+  color: #c5424e;
+  font-size: 11px;
+  font-weight: 600;
+  margin-top: 4px;
+  display: block;
+  text-align: left;
 }
 

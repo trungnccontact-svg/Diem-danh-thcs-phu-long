@@ -26,10 +26,11 @@ const args = process.argv.slice(2);
 const get = (flag) => { const i = args.indexOf(flag); return i !== -1 ? args[i + 1] : null; };
 const has = (flag) => args.includes(flag);
 
-const sendAll   = has('--all');
-const tokenArg  = get('--token');
-const topicArg  = get('--topic');
-const typeArg   = get('--type') || 'morning-start'; // loại thông báo mặc định
+const sendAll    = has('--all');
+const tokenArg   = get('--token');
+const topicArg   = get('--topic');
+const typeArg    = get('--type') || 'morning-start'; // loại thông báo mặc định
+const platformArg = get('--platform') || null;       // lọc theo platform: android | ios | web
 
 // ─── Định nghĩa các loại thông báo ──────────────────────────────────────────
 const NOTIFICATION_TYPES = {
@@ -100,11 +101,16 @@ async function buildMessage(target) {
     },
     android: {
       notification: {
-        sound:     'default',
+        sound:     'default', // Android OS yêu cầu sound file trong /res/raw của app native, nhưng với Web PWA ta giữ mặc định hoặc link mp3.
         channelId: 'attendance-reminders',
         priority:  'high',
       },
     },
+    webpush: {
+      notification: {
+        sound: '/notification-sound.mp3'
+      }
+    }
   };
 }
 
@@ -139,9 +145,10 @@ async function sendToAllUsers() {
   if (snapshot.exists()) {
     snapshot.forEach(child => {
       const val = child.val();
-      if (val?.token) {
+      const platform = val?.platform || 'web';
+      if (val?.token && (!platformArg || platform === platformArg)) {
         tokens.push(val.token);
-        names[val.token] = child.key + ` (${val.platform || 'web'})`;
+        names[val.token] = child.key + ` (${platform})`;
       }
     });
   }
@@ -185,6 +192,11 @@ async function sendToAllUsers() {
     android: {
       notification: { sound: 'default', channelId: 'attendance-reminders', priority: 'high' },
     },
+    webpush: {
+      notification: {
+        sound: '/notification-sound.mp3'
+      }
+    }
   });
 
   console.log(`📊 Kết quả: ${result.successCount} thành công / ${result.failureCount} thất bại`);

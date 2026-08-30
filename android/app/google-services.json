@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "173707383479",
+    "firebase_url": "https://diem-danh-thcs-phu-long-default-rtdb.firebaseio.com",
+    "project_id": "diem-danh-thcs-phu-long",
+    "storage_bucket": "diem-danh-thcs-phu-long.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:173707383479:android:dd27804148586fa7917332",
+        "android_client_info": {
+          "package_name": "com.phulong.diemdanh"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDeLXxTJbxR3vPcEFgkJ31blxN3YXdxpRY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

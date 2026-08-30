@@ -8,6 +8,7 @@ export const environment = {
     messagingSenderId: "173707383479",
     appId: "1:173707383479:web:2f9b7c89d1c2f75a917332",
     measurementId: "G-TZMLRVCST3",
-    vapidKey: "BGvOETHaj5-DDd4_uOcnVjRpIJ6CllbqqYM-hdjKSb3CFJb_PSVfMcVhsfJ8Iwdh87PWxBZXbMnmzlD1MdIbVV4"
+    vapidKey: "BGvOETHaj5-DDd4_uOcnVjRpIJ6CllbqqYM-hdjKSb3CFJb_PSVfMcVhsfJ8Iwdh87PWxBZXbMnmzlD1MdIbVV4",
+    enableNativePush: true
   }
 };

@@ -8,8 +8,8 @@
   "theme_color": "#10345d",
   "lang": "vi",
   "icons": [{
-    "src": "school-gate.jpg",
-    "sizes": "2048x1536",
+    "src": "school-logo.jpg",
+    "sizes": "512x512",
     "type": "image/jpeg",
     "purpose": "any"
   }]

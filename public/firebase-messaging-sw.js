@@ -23,8 +23,9 @@ messaging.onBackgroundMessage((payload) => {
   if (title) {
     self.registration.showNotification(title, {
       body: body ?? '',
-      icon: '/favicon.ico',
-      badge: '/favicon.ico',
+      icon: '/school-logo.jpg',
+      badge: '/school-logo.jpg',
+      sound: '/notification-sound.mp3', // Thiết lập âm thanh tùy chỉnh cho trình duyệt hỗ trợ
       data: payload.data,
       tag: 'attendance-reminder',
       requireInteraction: false,

@@ -6,6 +6,7 @@ import { getApp } from 'firebase/app';
 import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, User } from 'firebase/auth';
 import { getDatabase, ref, onValue, off, set, get } from 'firebase/database';
 import { NotificationService } from './notification.service';
+import { Capacitor } from '@capacitor/core';
 import { app as firebaseApp } from '../firebase'; // Đảm bảo Firebase được import để chạy initializeApp() trước
 
 type Role = 'admin' | 'teacher';
@@ -22,6 +23,11 @@ interface TeacherData {
   viewOnlyUids?: string[];  // admin test: chỉ hiển thị các teacher trong danh sách này
 }
 
+interface AbsenteeDetail {
+  name: string;
+  status: 'Có phép' | 'Không phép' | 'Đi trễ';
+}
+
 interface AttendanceRecord {
   teacherUid: string;
   teacherName: string;
@@ -29,6 +35,7 @@ interface AttendanceRecord {
   present: number;
   total: number;
   absentNames: string[];
+  absentees?: AbsenteeDetail[];
   checkedAt: string;
 }
 
@@ -40,6 +47,7 @@ interface TeacherUIModel {
   present: number | null;
   total: number | null;
   absentNames: string[];
+  absentees: AbsenteeDetail[];
   checkedAt: string | null;
   status: AttendanceStatus;
 }
@@ -89,6 +97,15 @@ export class App implements OnInit, OnDestroy {
   protected currentUser = signal<User | null>(null);
   protected currentUserProfile = signal<TeacherData | null>(null);
 
+  // Lớp gợi ý
+  protected readonly gradeList = ['6', '7', '8', '9'];
+  protected readonly classSuggestions = [
+    '6A1', '6A2', '6A3', '6A4', '6A5', '6A6', '6A7', '6A8', '6A9',
+    '7A1', '7A2', '7A3', '7A4', '7A5', '7A6', '7A7', '7A8', '7A9',
+    '8A1', '8A2', '8A3', '8A4', '8A5', '8A6', '8A7', '8A8', '8A9',
+    '9A1', '9A2', '9A3', '9A4', '9A5', '9A6', '9A7', '9A8', '9A9'
+  ];
+
   // Form đăng nhập & điểm danh
   protected phone = '';
   protected email = '';
@@ -96,11 +113,13 @@ export class App implements OnInit, OnDestroy {
   protected rememberMe = false;
   protected showPassword = false;
   protected className = '7A1';
-  protected present = 35;
-  protected total = 35;
+  protected present: number | null = 35;
+  protected total: number | null = 35;
   protected absentCount = 0;
   protected absentNames: string[] = [];
+  protected absentees: AbsenteeDetail[] = [];
   protected chatInput = '';
+  protected errors: { className?: string; present?: string; total?: string; absentees?: string } = {};
 
   // Dữ liệu Realtime (Lazy initialization)
   private get db() { return getDatabase(firebaseApp); }
@@ -111,12 +130,23 @@ export class App implements OnInit, OnDestroy {
   protected readonly dbTeachers = signal<TeacherData[]>([]);
   protected readonly dbAttendance = signal<Record<string, AttendanceRecord>>({});
 
+  // Bộ lọc admin theo khối lớp
+  protected readonly adminGradeFilter = signal<string>('Tất cả');
+
+  // Hàm helper để so sánh tự nhiên tên lớp (ví dụ: 6A1 < 6A2, 6A9 < 6A10, 6A < 7A)
+  private compareClassNames(a: string, b: string): number {
+    if (!a && !b) return 0;
+    if (!a) return 1;
+    if (!b) return -1;
+    return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
+  }
+
   // Model hiển thị cho bảng quản lý của Admin
   protected teachers = computed<TeacherUIModel[]>(() => {
     const list = this.dbTeachers();
     const attendanceMap = this.dbAttendance();
     
-    return list.map(t => {
+    const uiList = list.map(t => {
       const att = attendanceMap[t.uid];
       if (att) {
         return {
@@ -127,6 +157,7 @@ export class App implements OnInit, OnDestroy {
           present: att.present,
           total: att.total,
           absentNames: att.absentNames || [],
+          absentees: att.absentees || (att.absentNames ? att.absentNames.map(name => ({ name, status: 'Không phép' as const })) : []),
           checkedAt: att.checkedAt,
           status: 'Đã điểm danh' as AttendanceStatus
         };
@@ -139,18 +170,55 @@ export class App implements OnInit, OnDestroy {
           present: null,
           total: null,
           absentNames: [],
+          absentees: [],
           checkedAt: null,
           status: 'Chưa điểm danh' as AttendanceStatus
         };
       }
     });
+
+    // Sắp xếp tăng dần theo thứ tự tên lớp
+    // Lớp chưa điểm danh (className rỗng) sẽ được xếp xuống dưới cùng hoặc theo tên giáo viên
+    return uiList.sort((a, b) => {
+      if (a.status === 'Chưa điểm danh' && b.status === 'Đã điểm danh') return 1;
+      if (a.status === 'Đã điểm danh' && b.status === 'Chưa điểm danh') return -1;
+      if (a.status === 'Đã điểm danh' && b.status === 'Đã điểm danh') {
+        return this.compareClassNames(a.className, b.className);
+      }
+      // Cả hai chưa điểm danh thì xếp theo tên giáo viên
+      return a.name.localeCompare(b.name, 'vi');
+    });
   });
 
   protected filteredTeachers = computed(() => {
-    const value = this.filter();
-    if (value === 'Đã điểm danh') return this.teachers().filter(t => t.status === 'Đã điểm danh');
-    if (value === 'Chưa điểm danh') return this.teachers().filter(t => t.status === 'Chưa điểm danh');
-    return this.teachers();
+    const statusVal = this.filter();
+    const gradeVal = this.adminGradeFilter();
+    let result = this.teachers();
+
+    // Lọc theo trạng thái điểm danh
+    if (statusVal === 'Đã điểm danh') {
+      result = result.filter(t => t.status === 'Đã điểm danh');
+    } else if (statusVal === 'Chưa điểm danh') {
+      result = result.filter(t => t.status === 'Chưa điểm danh');
+    }
+
+    // Lọc theo khối lớp
+    if (gradeVal !== 'Tất cả') {
+      result = result.filter(t => {
+        if (t.status === 'Chưa điểm danh') {
+          // Giáo viên chưa điểm danh nhưng có thể lọc theo gợi ý khối nếu lớp mặc định của họ thuộc khối đó.
+          // Hoặc đơn giản là nếu họ chưa điểm danh, ta kiểm tra xem lớp mặc định hoặc tên lớp bắt đầu bằng số khối
+          // Ở đây ta xem xét className của họ. Nếu chưa điểm danh thì lớp trống, nên không thuộc khối cụ thể nào,
+          // Tuy nhiên để tiện theo dõi, nếu lọc khối, ta chỉ hiển thị những giáo viên thuộc khối đó đã điểm danh,
+          // hoặc kiểm tra email/tên để suy đoán. Phù hợp nhất là lọc theo lớp thực tế đã điểm danh.
+          return false; 
+        }
+        // Ví dụ lớp: 6A1 -> bắt đầu bằng kí tự của gradeVal
+        return t.className.trim().startsWith(gradeVal);
+      });
+    }
+
+    return result;
   });
 
   // Thống kê
@@ -195,8 +263,9 @@ export class App implements OnInit, OnDestroy {
           this.loggedIn.set(true);
           this.showLogin.set(false);
 
-          // Khởi động FCM Service Worker nhận notification
+          // Tự động khởi tạo thông báo trên cả Web và Mobile App Native
           this.notificationSvc.init(user.uid).catch(console.error);
+          this.updateNotificationPermissionStatus();
           
           // Đăng ký realtime listeners
           this.setupRealtimeSync();
@@ -218,6 +287,38 @@ export class App implements OnInit, OnDestroy {
       }
       this.loading.set(false);
     });
+  }
+
+  // Quản lý quyền thông báo tự động
+  protected readonly notificationPermission = signal<'granted' | 'denied' | 'default'>('default');
+
+  protected async updateNotificationPermissionStatus() {
+    if (Capacitor.isNativePlatform()) {
+      const status = await this.notificationSvc.getNativePermissionStatus();
+      this.notificationPermission.set(status === 'prompt' ? 'default' : status);
+      return;
+    }
+
+    if ('Notification' in window) {
+      this.notificationPermission.set(Notification.permission);
+    }
+  }
+
+  protected async requestNotificationPermission() {
+    const user = this.currentUser();
+    if (!user) return;
+
+    await this.notificationSvc.init(user.uid);
+    await this.updateNotificationPermissionStatus();
+
+    const permission = this.notificationPermission();
+    if (permission === 'denied') {
+      alert('Quyền thông báo hiện đang bị TỪ CHỐI trên thiết bị này. Vui lòng vào Cài đặt -> Thông báo -> Phú Long trên điện thoại của bạn để bật lại.');
+    } else if (permission === 'granted') {
+      alert('Bật nhận thông báo tự động thành công!');
+    } else if (Capacitor.isNativePlatform()) {
+      alert('Chưa bật được thông báo native. Kiểm tra file google-services.json trong android/app.');
+    }
   }
 
   ngOnDestroy() {
@@ -335,6 +436,7 @@ export class App implements OnInit, OnDestroy {
           this.present = myRecord.present;
           this.total = myRecord.total;
           this.absentNames = myRecord.absentNames || [];
+          this.absentees = myRecord.absentees || (myRecord.absentNames ? myRecord.absentNames.map(name => ({ name, status: 'Không phép' })) : []);
           this.absentCount = myRecord.total - myRecord.present;
           this.submitted.set(true);
         } else {
@@ -355,6 +457,7 @@ export class App implements OnInit, OnDestroy {
       this.present = data.present;
       this.total = data.total;
       this.absentNames = data.absentNames || [];
+      this.absentees = data.absentees || (data.absentNames ? data.absentNames.map((name: string) => ({ name, status: 'Không phép' })) : []);
       this.absentCount = data.total - data.present;
       this.submitted.set(true);
     } else {
@@ -477,6 +580,41 @@ export class App implements OnInit, OnDestroy {
     this.loginError.set('');
   }
 
+  protected clearError(field: 'className' | 'present' | 'total') {
+    this.errors[field] = undefined;
+  }
+
+  protected validateForm(): boolean {
+    let isValid = true;
+    this.errors = {};
+
+    if (!this.className || !this.className.trim()) {
+      this.errors.className = 'Không được để trống tên lớp';
+      isValid = false;
+    }
+
+    if (this.present === null || this.present === undefined || String(this.present).trim() === '') {
+      this.errors.present = 'Không được để trống số lượng có mặt';
+      isValid = false;
+    }
+
+    if (this.total === null || this.total === undefined || String(this.total).trim() === '') {
+      this.errors.total = 'Không được để trống tổng sĩ số';
+      isValid = false;
+    }
+
+    // Validation bổ sung: bắt buộc nhập tên cho toàn bộ học sinh vắng
+    if (this.absentCount > 0) {
+      const missingNames = this.absentees.some(abs => !abs.name || !abs.name.trim());
+      if (missingNames) {
+        this.errors.absentees = 'Vui lòng nhập tên cho tất cả học sinh vắng';
+        isValid = false;
+      }
+    }
+
+    return isValid;
+  }
+
   async submitAttendance() {
     const profile = this.currentUserProfile();
     if (!profile) return;
@@ -484,6 +622,13 @@ export class App implements OnInit, OnDestroy {
     const timeCheck = this.getTimeStatus(this.selectedSession());
     if (!timeCheck.allowed) {
       alert('Không thể điểm danh: ' + timeCheck.message);
+      return;
+    }
+
+    if (!this.validateForm()) {
+      if (this.errors.absentees) {
+        alert(this.errors.absentees);
+      }
       return;
     }
 
@@ -497,9 +642,10 @@ export class App implements OnInit, OnDestroy {
       teacherUid: profile.uid,
       teacherName: profile.name,
       className: this.className,
-      present: this.present,
-      total: this.total,
-      absentNames: this.absentNames.filter(Boolean),
+      present: this.present!,
+      total: this.total!,
+      absentNames: this.absentees.map(abs => abs.name.trim()),
+      absentees: this.absentees.map(abs => ({ name: abs.name.trim(), status: abs.status })),
       checkedAt: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
     };
 
@@ -516,24 +662,74 @@ export class App implements OnInit, OnDestroy {
 
   updateAbsentCount() {
     this.absentCount = Math.max((Number(this.total) || 0) - (Number(this.present) || 0), 0);
-    while (this.absentNames.length < this.absentCount) this.absentNames.push('');
-    this.absentNames = this.absentNames.slice(0, this.absentCount);
+    while (this.absentees.length < this.absentCount) {
+      this.absentees.push({ name: '', status: 'Không phép' });
+    }
+    this.absentees = this.absentees.slice(0, this.absentCount);
+    this.absentNames = this.absentees.map(a => a.name);
   }
 
   exportCsv() {
-    const rows = this.filteredTeachers().map(t => ({
-      'Tên giáo viên': t.name,
-      'Lớp': t.status === 'Chưa điểm danh' ? 'Chưa điểm danh' : t.className,
-      'Tỉ số điểm danh': t.status === 'Chưa điểm danh' ? 'Chưa điểm danh' : `${t.present}/${t.total}`,
-      'Số học sinh vắng': t.status === 'Chưa điểm danh' ? '' : t.absentNames.length,
-      'Tên học sinh vắng': t.absentNames.join('; '),
-      'Số điện thoại': t.phone,
-      'Trạng thái': t.status,
-      'Thời gian': t.checkedAt || ''
-    }));
+    const formattedDate = `${this.selectedDay()}/${this.selectedMonth()}/${this.selectedYear()}`;
+    const sessionText = this.selectedSession() === 'morning' ? 'buổi sáng' : 'buổi chiều';
+    const headerTitle = `Danh sách điểm danh học sinh THCS Phú Long – Ngày ${formattedDate} ${sessionText}`;
+
+    // Tạo mảng dữ liệu với hàng đầu tiên là tiêu đề trống để chèn tiêu đề
+    const rows = this.filteredTeachers().map(t => {
+      // Tạo danh sách học sinh vắng có kèm trạng thái xuống dòng dễ nhìn
+      const formattedAbsentees = t.status === 'Chưa điểm danh' 
+        ? '' 
+        : t.absentees.map(abs => `- ${abs.name} (${abs.status})`).join('\n');
+
+      return {
+        'Tên giáo viên': t.name,
+        'Lớp': t.status === 'Chưa điểm danh' ? 'Chưa điểm danh' : t.className,
+        'Tỉ số điểm danh': t.status === 'Chưa điểm danh' ? 'Chưa điểm danh' : `${t.present}/${t.total}`,
+        'Số học sinh vắng': t.status === 'Chưa điểm danh' ? '' : t.absentNames.length,
+        'Tên học sinh vắng': formattedAbsentees,
+        'Số điện thoại': t.phone,
+        'Trạng thái': t.status,
+        'Thời gian': t.checkedAt || ''
+      };
+    });
+
     const workbook = XLSX.utils.book_new();
-    const worksheet = XLSX.utils.json_to_sheet(rows);
-    worksheet['!cols'] = [{ wch: 24 }, { wch: 14 }, { wch: 20 }, { wch: 18 }, { wch: 34 }, { wch: 17 }, { wch: 18 }, { wch: 14 }];
+    
+    // Tạo sheet từ dữ liệu
+    const worksheet = XLSX.utils.json_to_sheet([]);
+    
+    // Ghi tiêu đề vào dòng đầu tiên (A1)
+    XLSX.utils.sheet_add_aoa(worksheet, [[headerTitle]], { origin: 'A1' });
+    
+    // Ghi tiêu đề các cột ở dòng thứ 3 (chừa dòng 2 trống cho thoáng hoặc merge dòng 1-2)
+    const headers = ['Tên giáo viên', 'Lớp', 'Tỉ số điểm danh', 'Số học sinh vắng', 'Tên học sinh vắng', 'Số điện thoại', 'Trạng thái', 'Thời gian'];
+    XLSX.utils.sheet_add_aoa(worksheet, [headers], { origin: 'A3' });
+    
+    // Ghi dữ liệu từ dòng thứ 4
+    XLSX.utils.sheet_add_json(worksheet, rows, { origin: 'A4', skipHeader: true });
+
+    // Định dạng chiều rộng các cột và kích hoạt thuộc tính tự động xuống dòng (wrap text)
+    worksheet['!cols'] = [
+      { wch: 24 }, // Tên giáo viên
+      { wch: 14 }, // Lớp
+      { wch: 20 }, // Tỉ số điểm danh
+      { wch: 18 }, // Số học sinh vắng
+      { wch: 40 }, // Tên học sinh vắng (rộng hơn vì có kèm chi tiết trạng thái)
+      { wch: 17 }, // Số điện thoại
+      { wch: 18 }, // Trạng thái
+      { wch: 14 }  // Thời gian
+    ];
+
+    // Duyệt qua tất cả các ô trong cột E (cột thứ 5 - Tên học sinh vắng) để thiết lập wrap text
+    const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1:H100');
+    for (let R = range.s.r; R <= range.e.r; ++R) {
+      const cell_ref = XLSX.utils.encode_cell({ c: 4, r: R }); // c=4 là cột E
+      if (worksheet[cell_ref]) {
+        if (!worksheet[cell_ref].s) worksheet[cell_ref].s = {};
+        worksheet[cell_ref].s.alignment = { wrapText: true, vertical: 'top' };
+      }
+    }
+
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Điểm danh');
     XLSX.writeFile(workbook, `diem-danh-${this.selectedDateStr()}.xlsx`);
   }
@@ -559,7 +755,6 @@ export class App implements OnInit, OnDestroy {
     this.chatInput = '';
   }
 
-  setClassSuggestion(value: string) { this.className = value; }
   callTeacher(phone: string) { window.location.href = `tel:${phone}`; }
 
   getAttendanceRate(): number {

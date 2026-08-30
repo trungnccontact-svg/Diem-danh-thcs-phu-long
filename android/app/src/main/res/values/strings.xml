@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Ph&#250; Long - &#272;i&#7875;m danh</string>
+    <string name="title_activity_main">Ph&#250; Long - &#272;i&#7875;m danh</string>
+    <string name="package_name">com.phulong.diemdanh</string>
+    <string name="custom_url_scheme">com.phulong.diemdanh</string>
+</resources>

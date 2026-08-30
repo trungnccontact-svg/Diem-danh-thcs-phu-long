@@ -5,6 +5,7 @@
     "ng": "ng",
     "start": "ng serve",
     "build": "ng build",
+    "assets:app": "node scripts/generate-app-icons.mjs",
     "watch": "ng build --watch --configuration development",
     "test": "ng test"
   },
@@ -29,6 +30,10 @@
     "@angular/platform-browser": "^20.3.0",
     "@angular/router": "^20.3.0",
     "@angular/service-worker": "^20.3.29",
+    "@capacitor/android": "^6.2.1",
+    "@capacitor/core": "^6.2.1",
+    "@capacitor/ios": "^6.2.1",
+    "@capacitor/push-notifications": "^6.0.5",
     "firebase": "^12.18.0",
     "rxjs": "~7.8.0",
     "tslib": "^2.3.0",
@@ -39,6 +44,7 @@
     "@angular/build": "^20.3.34",
     "@angular/cli": "^20.3.34",
     "@angular/compiler-cli": "^20.3.0",
+    "@capacitor/cli": "^6.2.1",
     "@types/jasmine": "~5.1.0",
     "jasmine-core": "~5.9.0",
     "karma": "~6.4.0",
@@ -46,6 +52,7 @@
     "karma-coverage": "~2.2.0",
     "karma-jasmine": "~5.1.0",
     "karma-jasmine-html-reporter": "~2.1.0",
+    "sharp": "^0.35.4",
     "typescript": "~5.9.2"
   }
 }

@@ -2,7 +2,10 @@
   "hosting": {
     "public": "dist/diem-danh-phu-long/browser",
     "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
-    "rewrites": [{ "source": "**", "destination": "/index.html" }]
+    "rewrites": [
+      { "source": "/app/**", "destination": "/app/index.html" },
+      { "source": "**", "destination": "/index.html" }
+    ]
   },
   "functions": {
     "source": "functions"
