@@ -53,8 +53,10 @@ jobs:
           fi
 
       - name: Tạo file Service Account JSON từ Github Secrets
+        env:
+          FIREBASE_KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
         run: |
-          echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > service-account.json
+          echo "$FIREBASE_KEY" > service-account.json
 
       - name: Gửi thông báo
         env:
