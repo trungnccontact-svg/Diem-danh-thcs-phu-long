@@ -9,10 +9,10 @@ initializeApp();
 const openRouterKey = defineSecret('OPENROUTER_API_KEY');
 
 const reminders = [
-  { schedule: '50 6 * * *', title: 'SẮP TỚI GIỜ ĐIỂM DANH TIẾT 1 BUỔI SÁNG', body: 'Vui lòng chuẩn bị điểm danh lớp học.' },
-  { schedule: '40 7 * * *', title: 'SẮP HẾT GIỜ ĐIỂM DANH TIẾT 1 BUỔI SÁNG', body: 'Hãy hoàn tất dữ liệu điểm danh.' },
-  { schedule: '10 13 * * *', title: 'SẮP TỚI GIỜ ĐIỂM DANH TIẾT 1 BUỔI CHIỀU', body: 'Vui lòng chuẩn bị điểm danh lớp học.' },
-  { schedule: '55 13 * * *', title: 'SẮP HẾT GIỜ ĐIỂM DANH TIẾT 1 BUỔI CHIỀU', body: 'Hãy hoàn tất dữ liệu điểm danh.' }
+  { schedule: '50 6 * * 1-5', title: 'SẮP TỚI GIỜ ĐIỂM DANH TIẾT 1 BUỔI SÁNG', body: 'Vui lòng chuẩn bị điểm danh lớp học.' },
+  { schedule: '40 7 * * 1-5', title: 'SẮP HẾT GIỜ ĐIỂM DANH TIẾT 1 BUỔI SÁNG', body: 'Hãy hoàn tất dữ liệu điểm danh.' },
+  { schedule: '10 13 * * 1-5', title: 'SẮP TỚI GIỜ ĐIỂM DANH TIẾT 1 BUỔI CHIỀU', body: 'Vui lòng chuẩn bị điểm danh lớp học.' },
+  { schedule: '55 13 * * 1-5', title: 'SẮP HẾT GIỜ ĐIỂM DANH TIẾT 1 BUỔI CHIỀU', body: 'Hãy hoàn tất dữ liệu điểm danh.' }
 ];
 
 async function sendReminder(title, body) {

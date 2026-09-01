@@ -1,0 +1,68 @@
+name: Scheduled Attendance Notifications
+
+on:
+  schedule:
+    # 06:50 VN (Thứ 2 - Thứ 6) -> 23:50 UTC (Chủ Nhật - Thứ Năm)
+    - cron: '50 23 * * 0-4'
+    # 07:40 VN (Thứ 2 - Thứ 6) -> 00:40 UTC (Thứ 2 - Thứ 6)
+    - cron: '40 0 * * 1-5'
+    # 13:10 VN (Thứ 2 - Thứ 6) -> 06:10 UTC (Thứ 2 - Thứ 6)
+    - cron: '10 6 * * 1-5'
+    # 13:55 VN (Thứ 2 - Thứ 6) -> 06:55 UTC (Thứ 2 - Thứ 6)
+    - cron: '55 6 * * 1-5'
+  workflow_dispatch:
+    inputs:
+      type:
+        description: 'Loại thông báo để test ngay (VD: morning-start)'
+        required: true
+        default: 'custom'
+
+jobs:
+  send_notification:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Cài đặt thư viện Firebase
+        run: npm install firebase-admin
+
+      - name: Xác định loại thông báo dựa vào giờ chạy (Cron)
+        id: set_type
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "TYPE=${{ github.event.inputs.type }}" >> $GITHUB_ENV
+          else
+            CRON="${{ github.event.schedule }}"
+            if [ "$CRON" == "50 23 * * 0-4" ]; then
+              echo "TYPE=morning-start" >> $GITHUB_ENV
+            elif [ "$CRON" == "40 0 * * 1-5" ]; then
+              echo "TYPE=morning-end" >> $GITHUB_ENV
+            elif [ "$CRON" == "10 6 * * 1-5" ]; then
+              echo "TYPE=afternoon-start" >> $GITHUB_ENV
+            elif [ "$CRON" == "55 6 * * 1-5" ]; then
+              echo "TYPE=afternoon-end" >> $GITHUB_ENV
+            else
+              echo "TYPE=custom" >> $GITHUB_ENV
+            fi
+          fi
+
+      - name: Tạo file Service Account JSON từ Github Secrets
+        run: |
+          echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > service-account.json
+
+      - name: Gửi thông báo
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ./service-account.json
+          FIREBASE_DATABASE_URL: ${{ secrets.FIREBASE_DATABASE_URL }}
+        run: |
+          node scripts/test-notification.mjs --all --type $TYPE
+
+      - name: Xóa file Service Account sau khi chạy xong
+        if: always()
+        run: rm -f service-account.json
