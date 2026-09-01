@@ -117,7 +117,24 @@ export class NotificationService {
       }
 
       this.attachNativeListeners(userId, db);
-      
+
+      // Tạo Notification Channel (bắt buộc cho Android 8+/API 26+)
+      // channelId phải khớp với 'channelId' gửi từ Cloud Function
+      try {
+        await PushNotifications.createChannel({
+          id: 'attendance-reminders',
+          name: 'Nhắc nhở điểm danh',
+          description: 'Thông báo nhắc nhở điểm danh học sinh',
+          importance: 5, // IMPORTANCE_HIGH
+          sound: 'default',
+          vibration: true,
+          visibility: 1, // VISIBILITY_PUBLIC
+        });
+        console.log('[FCM Native] Đã tạo notification channel: attendance-reminders');
+      } catch (chanErr) {
+        console.warn('[FCM Native] Không tạo được notification channel (có thể thiết bị cũ không hỗ trợ):', chanErr);
+      }
+
       try {
         await PushNotifications.register();
         console.log('[FCM Native] Đã đăng ký lắng nghe FCM token thành công.');
