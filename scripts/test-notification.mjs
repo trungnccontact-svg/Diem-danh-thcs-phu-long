@@ -26,11 +26,16 @@ const args = process.argv.slice(2);
 const get = (flag) => { const i = args.indexOf(flag); return i !== -1 ? args[i + 1] : null; };
 const has = (flag) => args.includes(flag);
 
-const sendAll    = has('--all');
-const tokenArg   = get('--token');
-const topicArg   = get('--topic');
-const typeArg    = get('--type') || 'morning-start'; // loại thông báo mặc định
-const platformArg = get('--platform') || null;       // lọc theo platform: android | ios | web
+const sendAll     = has('--all');
+const tokenArg    = get('--token');
+const topicArg    = get('--topic');
+const typeArg     = get('--type') || 'morning-start'; // loại thông báo mặc định
+const platformArg = get('--platform') || null;        // lọc theo platform: android | ios | web
+
+// IS_TEST_RUN=true → chạy tay (workflow_dispatch) → có prefix [TEST]
+// IS_TEST_RUN=false/không set → cron tự động → không có prefix [TEST]
+const IS_TEST = process.env.IS_TEST_RUN === 'true';
+const PREFIX  = IS_TEST ? '[TEST] ' : '';
 
 // ─── Định nghĩa các loại thông báo ──────────────────────────────────────────
 const NOTIFICATION_TYPES = {
@@ -79,19 +84,20 @@ async function buildMessage(target) {
   return {
     ...target,
     notification: {
-      title: `[TEST] ${notification.title}`,
+      title: `${PREFIX}${notification.title}`,
       body: notification.body,
     },
     data: {
       type:      'attendance-reminder',
       timestamp: new Date().toISOString(),
-      test:      'true',
+      test:      IS_TEST ? 'true' : 'false',
     },
     apns: {
+      headers: { 'apns-expiration': String(Math.floor(Date.now() / 1000) + 3600) }, // TTL 1 giờ
       payload: {
         aps: {
           alert: {
-            title: `[TEST] ${notification.title}`,
+            title: `${PREFIX}${notification.title}`,
             body:  notification.body,
           },
           sound: 'default',
@@ -100,13 +106,15 @@ async function buildMessage(target) {
       },
     },
     android: {
+      ttl: 3600000, // TTL 1 giờ (ms) — tránh thông báo tồn đọng khi thiết bị offline
       notification: {
-        sound:     'default', // Android OS yêu cầu sound file trong /res/raw của app native, nhưng với Web PWA ta giữ mặc định hoặc link mp3.
+        sound:     'default',
         channelId: 'attendance-reminders',
         priority:  'high',
       },
     },
     webpush: {
+      headers: { TTL: '3600' }, // TTL 1 giờ (giây)
       notification: {
         sound: '/notification-sound.mp3'
       }
@@ -176,23 +184,26 @@ async function sendToAllUsers() {
   const result = await messaging.sendEachForMulticast({
     tokens,
     notification: {
-      title: `[TEST] ${notification.title}`,
+      title: `${PREFIX}${notification.title}`,
       body:  notification.body,
     },
-    data: { type: 'attendance-reminder', test: 'true', timestamp: new Date().toISOString() },
+    data: { type: 'attendance-reminder', test: IS_TEST ? 'true' : 'false', timestamp: new Date().toISOString() },
     apns: {
+      headers: { 'apns-expiration': String(Math.floor(Date.now() / 1000) + 3600) }, // TTL 1 giờ
       payload: {
         aps: {
-          alert: { title: `[TEST] ${notification.title}`, body: notification.body },
+          alert: { title: `${PREFIX}${notification.title}`, body: notification.body },
           sound: 'default',
           badge: 1,
         },
       },
     },
     android: {
+      ttl: 3600000, // TTL 1 giờ (ms) — tránh thông báo tồn đọng khi thiết bị offline
       notification: { sound: 'default', channelId: 'attendance-reminders', priority: 'high' },
     },
     webpush: {
+      headers: { TTL: '3600' }, // TTL 1 giờ (giây)
       notification: {
         sound: '/notification-sound.mp3'
       }
@@ -212,7 +223,8 @@ console.log('━'.repeat(60));
 console.log('🔔 FIREBASE FCM TEST NOTIFICATION TOOL');
 console.log('━'.repeat(60));
 console.log(`📌 Loại thông báo : ${typeArg}`);
-console.log(`📌 Tiêu đề         : [TEST] ${notification.title}`);
+console.log(`📌 Chế độ          : ${IS_TEST ? '🧪 TEST (có prefix [TEST])' : '🚀 PRODUCTION (không có prefix)'}`);
+console.log(`📌 Tiêu đề         : ${PREFIX}${notification.title}`);
 console.log(`📌 Nội dung        : ${notification.body}`);
 console.log('━'.repeat(60));
 console.log('');

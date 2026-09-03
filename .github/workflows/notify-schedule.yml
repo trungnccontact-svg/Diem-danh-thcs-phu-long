@@ -62,6 +62,7 @@ jobs:
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ./service-account.json
           FIREBASE_DATABASE_URL: ${{ secrets.FIREBASE_DATABASE_URL }}
+          IS_TEST_RUN: ${{ github.event_name == 'workflow_dispatch' && 'true' || 'false' }}
         run: |
           node scripts/test-notification.mjs --all --type $TYPE
 

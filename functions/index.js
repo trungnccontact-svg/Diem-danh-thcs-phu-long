@@ -36,12 +36,18 @@ async function sendReminder(title, body) {
 
   if (!tokens.length) return { sent: 0 };
 
+  // TTL: thông báo tự hủy sau 1 tiếng nếu thiết bị offline (tránh giao trễ hàng loạt)
+  const TTL_SECONDS = 3600;
   const response = await getMessaging().sendEachForMulticast({
     tokens,
     notification: { title, body },
     data: { type: 'attendance-reminder' },
-    android: { notification: { sound: 'default', channelId: 'attendance-reminders' } },
+    android: {
+      ttl: TTL_SECONDS * 1000, // Android tính bằng milliseconds
+      notification: { sound: 'default', channelId: 'attendance-reminders' }
+    },
     webpush: {
+      headers: { TTL: String(TTL_SECONDS) }, // Web Push tính bằng giây (dạng string)
       notification: {
         sound: '/notification-sound.mp3'
       }
