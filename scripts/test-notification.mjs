@@ -254,3 +254,6 @@ if (sendAll) {
   console.log('    node scripts/test-notification.mjs --all --type custom');
   console.log('');
 }
+
+// Bắt buộc thoát chương trình sau khi chạy xong để GitHub Actions không bị treo (do Firebase giữ kết nối ngầm)
+process.exit(0);
