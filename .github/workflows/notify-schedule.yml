@@ -46,8 +46,10 @@ jobs:
             echo "TYPE=${{ github.event.inputs.type }}" >> $GITHUB_ENV
             echo "IS_TEST=${{ github.event.inputs.is_test }}" >> $GITHUB_ENV
           elif [ "${{ github.event_name }}" == "repository_dispatch" ]; then
-            echo "TYPE=${{ github.event.client_payload.type || 'morning-start' }}" >> $GITHUB_ENV
-            echo "IS_TEST=${{ github.event.client_payload.is_test || 'false' }}" >> $GITHUB_ENV
+            PAYLOAD_TYPE="${{ github.event.client_payload.type }}"
+            PAYLOAD_TEST="${{ github.event.client_payload.is_test }}"
+            echo "TYPE=${PAYLOAD_TYPE:-morning-start}" >> $GITHUB_ENV
+            echo "IS_TEST=${PAYLOAD_TEST:-false}" >> $GITHUB_ENV
           else
             echo "IS_TEST=false" >> $GITHUB_ENV
             CRON="${{ github.event.schedule }}"
