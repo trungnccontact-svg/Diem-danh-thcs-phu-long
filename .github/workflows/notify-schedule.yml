@@ -1,6 +1,7 @@
 name: Scheduled Attendance Notifications
 
 on:
+  # Lịch schedule nội bộ GitHub (có thể bị trễ 15-45 phút do hàng chờ GitHub)
   schedule:
     # 06:50 VN (Thứ 2 - Thứ 6) -> 23:50 UTC (Chủ Nhật - Thứ Năm)
     - cron: '50 23 * * 0-4'
@@ -13,9 +14,15 @@ on:
   workflow_dispatch:
     inputs:
       type:
-        description: 'Loại thông báo để test ngay (VD: morning-start)'
+        description: 'Loại thông báo (morning-start | morning-end | afternoon-start | afternoon-end | custom)'
         required: true
-        default: 'custom'
+        default: 'morning-start'
+      is_test:
+        description: 'Chế độ test (true: thêm prefix [TEST], false: sản xuất)'
+        required: false
+        default: 'false'
+  repository_dispatch:
+    types: [trigger-attendance-reminder]
 
 jobs:
   send_notification:
@@ -32,12 +39,17 @@ jobs:
       - name: Cài đặt thư viện Firebase
         run: npm install firebase-admin
 
-      - name: Xác định loại thông báo dựa vào giờ chạy (Cron)
+      - name: Xác định loại thông báo dựa vào giờ chạy (Cron / Dispatch)
         id: set_type
         run: |
           if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
             echo "TYPE=${{ github.event.inputs.type }}" >> $GITHUB_ENV
+            echo "IS_TEST=${{ github.event.inputs.is_test }}" >> $GITHUB_ENV
+          elif [ "${{ github.event_name }}" == "repository_dispatch" ]; then
+            echo "TYPE=${{ github.event.client_payload.type || 'morning-start' }}" >> $GITHUB_ENV
+            echo "IS_TEST=${{ github.event.client_payload.is_test || 'false' }}" >> $GITHUB_ENV
           else
+            echo "IS_TEST=false" >> $GITHUB_ENV
             CRON="${{ github.event.schedule }}"
             if [ "$CRON" == "50 23 * * 0-4" ]; then
               echo "TYPE=morning-start" >> $GITHUB_ENV
@@ -63,7 +75,7 @@ jobs:
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ./service-account.json
           FIREBASE_DATABASE_URL: ${{ secrets.FIREBASE_DATABASE_URL }}
-          IS_TEST_RUN: ${{ github.event_name == 'workflow_dispatch' && 'true' || 'false' }}
+          IS_TEST_RUN: ${{ env.IS_TEST || 'false' }}
         run: |
           node scripts/test-notification.mjs --all --type $TYPE
 
