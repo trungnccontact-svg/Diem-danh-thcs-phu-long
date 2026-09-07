@@ -99,6 +99,49 @@
 
 .login-button { width:100%; display:flex; justify-content:center; align-items:center; margin-top:20px; padding:14px 18px; font-size:14px; }
 
+/* APK Download Button */
+.apk-download-btn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  margin-top: 14px;
+  padding: 12px 18px;
+  background: linear-gradient(135deg, #1b365d, #14284b);
+  color: #ffffff;
+  border-radius: 12px;
+  text-decoration: none;
+  box-shadow: 0 4px 12px rgba(27, 54, 93, 0.25);
+  transition: all 0.2s ease;
+  box-sizing: border-box;
+}
+.apk-download-btn:hover {
+  background: linear-gradient(135deg, #234677, #1b365d);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(27, 54, 93, 0.35);
+}
+.apk-download-btn svg {
+  flex-shrink: 0;
+  fill: #4caf50;
+}
+.apk-download-btn div {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 1.2;
+}
+.apk-download-btn small {
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  opacity: 0.85;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.apk-download-btn strong {
+  font-size: 13px;
+  font-weight: 800;
+}
+
 .error-text { color:#c5424e; font-size:12px; margin:12px 0 0; }
 
 .login-foot { text-align:center; color:#9aa8b9; font-size:10px; margin:22px 0 0; }
