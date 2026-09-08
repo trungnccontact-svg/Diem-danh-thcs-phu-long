@@ -43,13 +43,36 @@ async function sendReminder(title, body) {
     notification: { title, body },
     data: { type: 'attendance-reminder' },
     android: {
+      priority: 'high', // Ép Android phát thông báo ngay cả khi máy đang ngủ sâu (Doze mode sáng sớm)
       ttl: TTL_SECONDS * 1000, // Android tính bằng milliseconds
-      notification: { sound: 'default', channelId: 'attendance-reminders' }
+      notification: {
+        sound: 'default',
+        channelId: 'attendance-reminders',
+        priority: 'high',
+        defaultSound: true,
+        defaultVibrateTimings: true
+      }
+    },
+    apns: {
+      headers: {
+        'apns-priority': '10' // High priority cho iOS
+      },
+      payload: {
+        aps: {
+          alert: { title, body },
+          sound: 'default',
+          badge: 1
+        }
+      }
     },
     webpush: {
-      headers: { TTL: String(TTL_SECONDS) }, // Web Push tính bằng giây (dạng string)
+      headers: {
+        TTL: String(TTL_SECONDS),
+        Urgency: 'high' // Độ ưu tiên cao cho Web push
+      },
       notification: {
-        sound: '/notification-sound.mp3'
+        sound: '/notification-sound.mp3',
+        requireInteraction: true
       }
     }
   });

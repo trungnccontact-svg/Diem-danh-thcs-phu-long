@@ -106,12 +106,9 @@ async function buildMessage(target) {
       },
     },
     android: {
+      priority: 'high',
       ttl: 3600000, // TTL 1 giờ (ms) — tránh thông báo tồn đọng khi thiết bị offline
-      notification: {
-        sound:     'default',
-        channelId: 'attendance-reminders',
-        priority:  'high',
-      },
+      notification: { sound: 'default', channelId: 'attendance-reminders', priority: 'high', defaultSound: true, defaultVibrateTimings: true },
     },
     webpush: {
       headers: { TTL: '3600' }, // TTL 1 giờ (giây)
@@ -199,8 +196,9 @@ async function sendToAllUsers() {
       },
     },
     android: {
+      priority: 'high',
       ttl: 3600000, // TTL 1 giờ (ms) — tránh thông báo tồn đọng khi thiết bị offline
-      notification: { sound: 'default', channelId: 'attendance-reminders', priority: 'high' },
+      notification: { sound: 'default', channelId: 'attendance-reminders', priority: 'high', defaultSound: true, defaultVibrateTimings: true },
     },
     webpush: {
       headers: { TTL: '3600' }, // TTL 1 giờ (giây)
