@@ -1,16 +1,6 @@
 name: Scheduled Attendance Notifications
 
 on:
-  # Lịch schedule nội bộ GitHub (có thể bị trễ 15-45 phút do hàng chờ GitHub)
-  schedule:
-    # 06:50 VN (Thứ 2 - Thứ 6) -> 23:50 UTC (Chủ Nhật - Thứ Năm)
-    - cron: '50 23 * * 0-4'
-    # 07:40 VN (Thứ 2 - Thứ 6) -> 00:40 UTC (Thứ 2 - Thứ 6)
-    - cron: '40 0 * * 1-5'
-    # 13:10 VN (Thứ 2 - Thứ 6) -> 06:10 UTC (Thứ 2 - Thứ 6)
-    - cron: '10 6 * * 1-5'
-    # 13:55 VN (Thứ 2 - Thứ 6) -> 06:55 UTC (Thứ 2 - Thứ 6)
-    - cron: '55 6 * * 1-5'
   workflow_dispatch:
     inputs:
       type:
