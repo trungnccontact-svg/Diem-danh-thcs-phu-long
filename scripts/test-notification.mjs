@@ -93,7 +93,10 @@ async function buildMessage(target) {
       test:      IS_TEST ? 'true' : 'false',
     },
     apns: {
-      headers: { 'apns-expiration': String(Math.floor(Date.now() / 1000) + 3600) }, // TTL 1 giờ
+      headers: {
+        'apns-priority': '10',          // High priority cho iOS (không bị hoãn)
+        'apns-expiration': String(Math.floor(Date.now() / 1000) + 3600), // TTL 1 giờ
+      },
       payload: {
         aps: {
           alert: {
@@ -111,9 +114,13 @@ async function buildMessage(target) {
       notification: { sound: 'default', channelId: 'attendance-reminders', priority: 'high', defaultSound: true, defaultVibrateTimings: true },
     },
     webpush: {
-      headers: { TTL: '3600' }, // TTL 1 giờ (giây)
+      headers: {
+        TTL: '3600',       // TTL 1 giờ (giây)
+        Urgency: 'high',   // Đảm bảo Web Push tới ngay, không bị hoãn
+      },
       notification: {
-        sound: '/notification-sound.mp3'
+        sound: '/notification-sound.mp3',
+        requireInteraction: true,
       }
     }
   };
@@ -186,7 +193,10 @@ async function sendToAllUsers() {
     },
     data: { type: 'attendance-reminder', test: IS_TEST ? 'true' : 'false', timestamp: new Date().toISOString() },
     apns: {
-      headers: { 'apns-expiration': String(Math.floor(Date.now() / 1000) + 3600) }, // TTL 1 giờ
+      headers: {
+        'apns-priority': '10',
+        'apns-expiration': String(Math.floor(Date.now() / 1000) + 3600), // TTL 1 giờ
+      },
       payload: {
         aps: {
           alert: { title: `${PREFIX}${notification.title}`, body: notification.body },
@@ -201,9 +211,13 @@ async function sendToAllUsers() {
       notification: { sound: 'default', channelId: 'attendance-reminders', priority: 'high', defaultSound: true, defaultVibrateTimings: true },
     },
     webpush: {
-      headers: { TTL: '3600' }, // TTL 1 giờ (giây)
+      headers: {
+        TTL: '3600',
+        Urgency: 'high',
+      },
       notification: {
-        sound: '/notification-sound.mp3'
+        sound: '/notification-sound.mp3',
+        requireInteraction: true,
       }
     }
   });

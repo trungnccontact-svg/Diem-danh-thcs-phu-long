@@ -45,3 +45,12 @@ Thumbs.db
 # Firebase cache
 .firebase/
 
+# Firebase Service Account keys — KHÔNG được commit lên git
+*firebase-adminsdk*.json
+service-account.json
+*-credentials.json
+
+# Environment secrets
+.env
+.env.local
+.env.production
