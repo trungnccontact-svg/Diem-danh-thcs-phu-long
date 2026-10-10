@@ -1,0 +1,11 @@
+const fs = require('node:fs');
+const vm = require('node:vm');
+const ts = require('typescript');
+const source = fs.readFileSync('src/environments/environment.ts', 'utf8');
+const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText;
+const context = { exports: {} };
+vm.runInNewContext(compiled, context);
+const { firebase } = context.exports.environment;
+const { vapidKey, enableNativePush, ...config } = firebase;
+fs.writeFileSync('public/firebase-config.js', `self.PHULONG_FIREBASE_CONFIG = ${JSON.stringify(config, null, 2)};\n`);
+console.log('Generated Firebase worker config for', config.projectId);

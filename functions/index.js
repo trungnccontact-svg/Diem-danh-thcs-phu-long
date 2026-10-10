@@ -7,6 +7,7 @@ const { getDatabase } = require('firebase-admin/database');
 
 initializeApp();
 const openRouterKey = defineSecret('OPENROUTER_API_KEY');
+Object.assign(exports, require('./chat-notifications'));
 
 const reminders = [
   { schedule: '50 6 * * 1-5', title: 'SẮP TỚI GIỜ ĐIỂM DANH TIẾT 1 BUỔI SÁNG', body: 'Vui lòng chuẩn bị điểm danh lớp học.' },

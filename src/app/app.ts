@@ -1,4 +1,6 @@
 import { CommonModule } from '@angular/common';
+import { TeacherChat } from './teacher-chat';
+import { environment } from '../environments/environment';
 import { Component, computed, inject, signal, OnInit, OnDestroy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import * as XLSX from 'xlsx-js-style';
@@ -60,12 +62,13 @@ interface ChatMessage {
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, TeacherChat],
   templateUrl: './app.html',
   styleUrl: './app.scss'
 })
 export class App implements OnInit, OnDestroy {
-  private readonly notificationSvc = inject(NotificationService);
+  protected readonly chatDemo = ['localhost', '127.0.0.1'].includes(location.hostname) && new URLSearchParams(location.search).get('demo') === 'chat';
+  protected readonly notificationSvc = inject(NotificationService);
   
   // Trạng thái chung
   protected readonly today = new Intl.DateTimeFormat('vi-VN', { dateStyle: 'full' }).format(new Date());
@@ -84,7 +87,7 @@ export class App implements OnInit, OnDestroy {
   protected readonly loggedIn = signal(false);
   protected readonly showLogin = signal(true);
   protected readonly loginError = signal('');
-  protected readonly selectedNav = signal('Tổng quan');
+  protected readonly selectedNav = signal(new URLSearchParams(location.search).has('chat') ? 'Chat' : 'Tổng quan');
   protected readonly filter = signal('Tất cả');
   protected readonly submitted = signal(false);
   protected readonly showChat = signal(false);
@@ -231,6 +234,7 @@ export class App implements OnInit, OnDestroy {
   ]);
 
   ngOnInit() {
+    if (this.chatDemo) { this.loading.set(false); return; }
     // Tự động chọn phiên dựa trên giờ hiện tại
     const currentHour = new Date().getHours();
     this.selectedSession.set(currentHour < 12 ? 'morning' : 'afternoon');
@@ -491,6 +495,10 @@ export class App implements OnInit, OnDestroy {
   }
 
   async login() {
+    if (!environment.firebase.databaseURL) {
+      this.loginError.set('Hệ thống chưa được cấu hình cơ sở dữ liệu của trường. Vui lòng liên hệ quản trị viên.');
+      return;
+    }
     if (this.cooldownTime() > 0) {
       this.loginError.set(`Bạn đã thử quá nhiều lần. Vui lòng thử lại sau ${this.cooldownTime()} giây.`);
       return;
@@ -568,6 +576,7 @@ export class App implements OnInit, OnDestroy {
 
   async logout() {
     this.loading.set(true);
+    await this.notificationSvc.disconnect();
     await signOut(this.auth);
     this.loggedIn.set(false);
     this.showLogin.set(true);

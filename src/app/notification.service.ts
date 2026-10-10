@@ -1,17 +1,54 @@
-import { Injectable } from '@angular/core';
+import { Injectable, signal } from '@angular/core';
 import { getApp } from 'firebase/app';
-import { getMessaging, getToken, onMessage } from 'firebase/messaging';
-import { getDatabase, ref, set } from 'firebase/database';
+import { getMessaging, getToken, onMessage, isSupported } from 'firebase/messaging';
+import { getDatabase, ref, set, onValue, query, limitToLast, orderByChild, update, get, remove } from 'firebase/database';
 import { environment } from '../environments/environment';
 import { Capacitor } from '@capacitor/core';
 import { PushNotifications } from '@capacitor/push-notifications';
 
 @Injectable({ providedIn: 'root' })
 export class NotificationService {
+  readonly inbox = signal<{ id: string; title: string; body: string; teacherUid: string; type: string; createdAt: number; readAt: number }[]>([]);
+  readonly latest = signal<{ id: string; title: string; body: string; teacherUid: string } | null>(null);
+  readonly pushStatus = signal('Chưa đăng ký push');
+  private inboxStop?: () => void;
+  private foregroundStop?: () => void;
+  private userId = '';
+  private deviceId = localStorage.getItem('phulong-device-id') || crypto.randomUUID();
+  private token = '';
   private nativeListenersAttached = false;
+
+  watchInbox(userId: string) {
+    if (this.userId === userId && this.inboxStop) return;
+    this.inboxStop?.(); this.foregroundStop?.(); this.userId = userId;
+    localStorage.setItem('phulong-device-id', this.deviceId);
+    let initialized = false; const seen = new Set<string>();
+    this.inboxStop = onValue(query(ref(getDatabase(getApp()), `userNotifications/${userId}`), orderByChild('createdAt'), limitToLast(100)), snap => {
+      const list = Object.entries(snap.val() || {}).map(([id, value]) => ({ ...(value as any), id })).sort((a,b) => b.createdAt - a.createdAt);
+      if (initialized) { const fresh = list.find(item => !seen.has(item.id)); if (fresh) this.latest.set(fresh); }
+      list.forEach(item => seen.add(item.id)); initialized = true; this.inbox.set(list);
+    }, () => this.pushStatus.set('Không thể tải thông báo từ database'));
+  }
+  async openNotification(id: string, teacherUid: string) {
+    if (this.userId) await update(ref(getDatabase(getApp()), `userNotifications/${this.userId}/${id}`), { readAt: Date.now() });
+    window.location.assign('/?chat=1&teacher=' + encodeURIComponent(teacherUid));
+  }
+  async disconnect() {
+    this.inboxStop?.(); this.foregroundStop?.(); this.inboxStop = undefined; this.foregroundStop = undefined;
+    if (this.userId) {
+      const db = getDatabase(getApp());
+      await remove(ref(db, `fcmDevices/${this.userId}/${this.deviceId}`)).catch(() => {});
+      const legacy = ref(db, `fcmTokens/${this.userId}`);
+      const saved = await get(legacy).catch(() => null);
+      if (this.token && saved?.val()?.token === this.token) await remove(legacy).catch(() => {});
+    }
+    this.userId = ''; this.token = ''; this.inbox.set([]); this.latest.set(null);
+    if (Capacitor.isNativePlatform()) { await PushNotifications.removeAllListeners(); this.nativeListenersAttached = false; }
+  }
 
   /** Khởi tạo FCM — gọi sau khi user đăng nhập (Firebase đã initializeApp rồi) */
   async init(userId: string): Promise<void> {
+    this.watchInbox(userId);
     const app = getApp();
     const db = getDatabase(app);
 
@@ -26,10 +63,13 @@ export class NotificationService {
     }
 
     try {
+      if (!environment.firebase.vapidKey) { this.pushStatus.set('Chưa cấu hình VAPID key cho dự án mới; vẫn nhận thông báo trong ứng dụng.'); return; }
+      if (!await isSupported()) { this.pushStatus.set('Trình duyệt không hỗ trợ push; vẫn nhận thông báo trong ứng dụng.'); return; }
       const messaging = getMessaging(app);
       const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
       const permission = await Notification.requestPermission();
       if (permission !== 'granted') {
+        this.pushStatus.set('Chưa cấp quyền push; vẫn nhận thông báo trong ứng dụng.');
         console.warn('[FCM Web] Người dùng từ chối quyền thông báo.');
         return;
       }
@@ -40,6 +80,9 @@ export class NotificationService {
       });
 
       if (token) {
+        this.token = token;
+        await set(ref(db, `fcmDevices/${userId}/${this.deviceId}`), { token, updatedAt: Date.now(), platform: this.getPlatform() });
+        this.pushStatus.set('Đã đăng ký push trên trình duyệt này');
         console.log('[FCM Web] Token lấy thành công:', token.slice(0, 30) + '...');
         await set(ref(db, `fcmTokens/${userId}`), {
           token,
@@ -52,18 +95,21 @@ export class NotificationService {
         console.warn('[FCM Web] Không lấy được token. Kiểm tra cấu hình VAPID key.');
       }
 
-      onMessage(messaging, (payload) => {
+      this.foregroundStop?.();
+      this.foregroundStop = onMessage(messaging, (payload) => {
         console.log('[FCM Web] Foreground message:', payload);
         const { title, body } = payload.notification ?? {};
         if (title && 'Notification' in window) {
-          new Notification(title, {
+          const notification = new Notification(title, {
             body: body ?? '',
             icon: '/school-logo.jpg',
-            tag: 'attendance-reminder',
+            tag: payload.data?.['type'] === 'teacher-chat' ? 'teacher-chat' : 'attendance-reminder',
           });
+          notification.onclick = () => { window.focus(); if (payload.data?.['notificationId']) void this.openNotification(payload.data['notificationId'], payload.data['teacherUid']); notification.close(); };
         }
       });
     } catch (err) {
+      this.pushStatus.set('Đăng ký push thất bại; vẫn nhận thông báo trong ứng dụng.');
       console.error('[FCM Web] Lỗi khởi tạo:', err);
     }
   }
@@ -153,6 +199,8 @@ export class NotificationService {
 
     PushNotifications.addListener('registration', async (tokenData) => {
       const token = tokenData.value;
+      this.token = token;
+      await set(ref(db, `fcmDevices/${userId}/${this.deviceId}`), { token, updatedAt: Date.now(), platform: Capacitor.getPlatform() });
       console.log('[FCM Native] Lấy token native thành công:', token.slice(0, 30) + '...');
 
       await set(ref(db, `fcmTokens/${userId}`), {
