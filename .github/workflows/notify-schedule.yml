@@ -11,6 +11,10 @@ on:
         description: 'Chế độ test (true: thêm prefix [TEST], false: sản xuất)'
         required: false
         default: 'false'
+      validate_only:
+        description: 'Chỉ kiểm tra workflow và cấu hình, không gửi thông báo'
+        type: boolean
+        default: false
   repository_dispatch:
     types: [trigger-attendance-reminder]
 
@@ -27,7 +31,7 @@ jobs:
           node-version: '20'
 
       - name: Cài đặt thư viện Firebase
-        run: npm install firebase-admin
+        run: npm ci --prefix scripts --ignore-scripts
 
       - name: Xác định loại thông báo dựa vào giờ chạy (Cron / Dispatch)
         id: set_type
@@ -64,12 +68,21 @@ jobs:
 
 
       - name: Gửi thông báo
+        if: ${{ inputs.validate_only != true }}
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ./service-account.json
           FIREBASE_DATABASE_URL: ${{ secrets.FIREBASE_DATABASE_URL }}
           IS_TEST_RUN: ${{ env.IS_TEST || 'false' }}
         run: |
           node scripts/test-notification.mjs --all --type $TYPE
+
+      - name: Kiểm tra cấu hình không gửi thông báo
+        if: ${{ inputs.validate_only == true }}
+        env:
+          FIREBASE_DATABASE_URL: ${{ secrets.FIREBASE_DATABASE_URL }}
+        run: |
+          node --check scripts/test-notification.mjs
+          node --input-type=module -e "import fs from 'node:fs'; const key=JSON.parse(fs.readFileSync('service-account.json','utf8')); if (!key.project_id || !key.client_email || !key.private_key || !process.env.FIREBASE_DATABASE_URL) throw new Error('Thiếu cấu hình Firebase trong GitHub Secrets'); console.log('Cấu hình Firebase hợp lệ về cấu trúc');"
 
       - name: Xóa file Service Account sau khi chạy xong
         if: always()
