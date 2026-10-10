@@ -1,7 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { TeacherChat } from './teacher-chat';
 import { environment } from '../environments/environment';
-import { Component, computed, inject, signal, OnInit, OnDestroy } from '@angular/core';
+import { Component, computed, inject, signal, OnInit, OnDestroy, HostListener } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import * as XLSX from 'xlsx-js-style';
 import { getApp } from 'firebase/app';
@@ -88,6 +88,20 @@ export class App implements OnInit, OnDestroy {
   protected readonly showLogin = signal(true);
   protected readonly loginError = signal('');
   protected readonly selectedNav = signal(new URLSearchParams(location.search).has('chat') ? 'Chat' : 'Tổng quan');
+  protected readonly mobileMenuOpen = signal(false);
+
+  protected navigateTo(section: string) {
+    this.selectedNav.set(section);
+    this.closeMobileMenu();
+  }
+
+  @HostListener('document:keydown.escape')
+  protected closeMobileMenu() {
+    if (this.mobileMenuOpen()) {
+      this.mobileMenuOpen.set(false);
+      document.getElementById('mobile-menu-toggle')?.focus();
+    }
+  }
   protected readonly filter = signal('Tất cả');
   protected readonly submitted = signal(false);
   protected readonly showChat = signal(false);
