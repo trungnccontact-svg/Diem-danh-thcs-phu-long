@@ -71,6 +71,37 @@
       "$uid": {
         ".read": "auth != null && (auth.uid == $uid || root.child('users').child(auth.uid).child('role').val() == 'admin')"
       }
+    },
+    "notificationRequests": {
+      ".indexOn": [
+        "status"
+      ],
+      "$requestId": {
+        ".read": "auth != null && data.child('actorUid').val() == auth.uid",
+        ".write": "auth != null && !data.exists() && root.child('users').child(auth.uid).child('role').val() == 'admin' && root.child('users').child(newData.child('teacherUid').val()).child('role').val() == 'teacher'",
+        ".validate": "newData.hasChildren(['actorUid','teacherUid','content','requestId','status','createdAt']) && newData.child('actorUid').val() == auth.uid && newData.child('teacherUid').isString() && newData.child('content').isString() && newData.child('content').val().length > 0 && newData.child('content').val().length <= 500 && newData.child('requestId').isString() && newData.child('requestId').val().matches(/^[A-Za-z0-9_-]{1,128}$/) && newData.child('status').val() == 'pending' && newData.child('createdAt').isNumber() && newData.child('createdAt').val() <= now + 10000",
+        "$other": {
+          ".validate": false
+        },
+        "actorUid": {
+          ".validate": true
+        },
+        "teacherUid": {
+          ".validate": true
+        },
+        "content": {
+          ".validate": true
+        },
+        "requestId": {
+          ".validate": true
+        },
+        "status": {
+          ".validate": true
+        },
+        "createdAt": {
+          ".validate": true
+        }
+      }
     }
   }
 }

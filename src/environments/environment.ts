@@ -9,7 +9,7 @@ export const environment = {
     "messagingSenderId": "84292175302",
     "measurementId": "G-DS59D2ML41",
     "databaseURL": "https://du-an-phu-long-default-rtdb.asia-southeast1.firebasedatabase.app",
-    "vapidKey": "BKaKae9Eq8IamsKFjZceI5QLZo233nn3QtC6nEGXwPLIC0W9escystUnbip9c1wopxUl6eKjFBVLJbbvF882OUg",
+    "vapidKey": "BKaKae9Eq8IamsKFjZceI5QLZo233nn3QtC6nEGXwPlIC0W9escystUnbip9c1wopxUl6eKjFBVLJbbvF882OUg",
     "enableNativePush": true
   }
 };

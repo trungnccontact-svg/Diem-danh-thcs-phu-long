@@ -6,12 +6,29 @@ const { createRequire } = require('node:module');
 const requireFunctions = createRequire(path.resolve(__dirname, '../functions/package.json'));
 const { initializeApp, cert, refreshToken, applicationDefault } = requireFunctions('firebase-admin/app');
 const { getAuth } = requireFunctions('firebase-admin/auth');
+const { getDatabase } = requireFunctions('firebase-admin/database');
 const credentialPath = process.env.GOOGLE_APPLICATION_CREDENTIALS || path.resolve(__dirname, '../tmp/firebase-migration/target-credentials.json');
 const key = fs.existsSync(credentialPath) ? JSON.parse(fs.readFileSync(credentialPath, 'utf8')) : null;
 if (key?.project_id && key.project_id !== 'du-an-phu-long') throw new Error('Credentials belong to another Firebase project.');
 const credential = key ? (key.type === 'authorized_user' ? refreshToken(key) : cert(key)) : applicationDefault();
 initializeApp({ credential, projectId: 'du-an-phu-long', databaseURL: process.env.FIREBASE_DATABASE_URL || 'https://du-an-phu-long-default-rtdb.asia-southeast1.firebasedatabase.app' });
 const send = require('../functions/chat-notifications').sendTeacherNotificationNow;
+const requests = getDatabase().ref('notificationRequests');
+async function processRequest(snapshot) {
+  if (snapshot.val()?.status !== 'pending') return;
+  const request = snapshot.ref;
+  try {
+    const claim = await request.transaction(value => value?.status === 'pending' ? { ...value, status: 'processing', startedAt: Date.now() } : undefined);
+    if (!claim.committed) return;
+    const value = claim.snapshot.val();
+    const result = await send.run({ auth: { uid: value.actorUid }, data: { teacherUid: value.teacherUid, content: value.content, requestId: value.requestId } });
+    await request.update({ status: 'done', result, completedAt: Date.now() });
+  } catch (error) {
+    await request.update({ status: 'error', code: error.code || 'internal', completedAt: Date.now() }).catch(() => {});
+    console.error('Notification request failed:', error.code || 'internal');
+  }
+}
+requests.on('child_added', snapshot => { void processRequest(snapshot); }, error => console.error('Notification queue unavailable:', error.code));
 http.createServer(async (req, res) => {
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
   res.setHeader('Cache-Control', 'no-store');

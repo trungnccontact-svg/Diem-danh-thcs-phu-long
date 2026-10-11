@@ -4,10 +4,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { getDatabase, ref, onValue, set, query, orderByChild, limitToLast } from 'firebase/database';
 import { app } from '../firebase';
-import { getFunctions, httpsCallable } from 'firebase/functions';
 import { push } from 'firebase/database';
-import { getAuth } from 'firebase/auth';
-import { isDevMode } from '@angular/core';
 
 interface Profile { uid: string; name: string; role: 'admin' | 'teacher'; className?: string; viewOnlyUids?: string[] }
 interface Schedule { enabled: boolean; content: string; repeat: string; date: string; start: string; end: string; updatedAt: number; updatedBy?: string }
@@ -87,17 +84,20 @@ export class TeacherNotifications implements OnInit, OnDestroy {
       if (!this.pendingSend || this.pendingSend.uid !== uid || this.pendingSend.content !== content) {
         this.pendingSend = { uid, content, requestId: push(ref(getDatabase(app), 'notificationRequests')).key! };
       }
-      const send = httpsCallable<{ teacherUid: string; content: string; requestId: string }, { status: string; accepted: number; codes?: string[] }>(getFunctions(app, 'asia-southeast1'), 'sendTeacherNotificationNow');
-      const payload = { teacherUid: uid, content, requestId: this.pendingSend.requestId };
-      let result: { data: { status: string; accepted: number; codes?: string[] } };
-      if (isDevMode()) {
-        const user = getAuth(app).currentUser;
-        if (!user) throw { code: 'unauthenticated' };
-        const response = await fetch('/api/notifications/send', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + await user.getIdToken() }, body: JSON.stringify(payload) });
-        const data = await response.json();
-        if (!response.ok) throw data;
-        result = { data };
-      } else result = await send(payload);
+      const request = push(ref(getDatabase(app), 'notificationRequests'));
+      await set(request, { actorUid: this.profile.uid, teacherUid: uid, content, requestId: this.pendingSend.requestId, status: 'pending', createdAt: Date.now() });
+      const result = await new Promise<{ data: { status: string; accepted: number; codes?: string[] } }>((resolve, reject) => {
+        let stop: (() => void) | undefined;
+        const timer = setTimeout(() => { stop?.(); reject({ code: 'worker-timeout' }); }, 45000);
+        stop = onValue(request, snapshot => {
+          const value = snapshot.val();
+          if (value?.status === 'done' || value?.status === 'error') {
+            clearTimeout(timer); stop?.();
+            if (value.status === 'error') reject({ code: value.code });
+            else resolve({ data: value.result });
+          }
+        }, error => { clearTimeout(timer); stop?.(); reject(error); });
+      });
       const outcome = result.data.status;
       if (result.data.codes?.includes('messaging/mismatched-credential')) {
         this.status.set('Đã lưu thông báo, nhưng thiết bị đang dùng token của dự án Firebase cũ. Cần cập nhật cấu hình Firebase của ứng dụng và đăng ký lại thông báo trên thiết bị.');
@@ -107,7 +107,7 @@ export class TeacherNotifications implements OnInit, OnDestroy {
       if (outcome === 'accepted' || outcome === 'no-token') this.pendingSend = undefined;
     } catch (error) {
       const code = (error as { code?: string }).code || '';
-      this.status.set(code.includes('permission-denied') ? 'Không có quyền gửi thông báo cho giáo viên này.' : code.includes('unauthenticated') ? 'Vui lòng đăng nhập lại để gửi thông báo.' : 'Gửi chưa thành công. Kiểm tra kết nối hoặc dịch vụ gửi thông báo rồi thử lại.');
+      this.status.set(code.includes('permission-denied') ? 'Không có quyền gửi thông báo cho giáo viên này.' : code.includes('worker-timeout') ? 'Yêu cầu đã lưu nhưng máy chủ gửi chưa phản hồi. Cần bật dịch vụ gửi thông báo trên máy quản trị.' : code.includes('unauthenticated') ? 'Vui lòng đăng nhập lại để gửi thông báo.' : 'Gửi chưa thành công. Kiểm tra kết nối hoặc dịch vụ gửi thông báo rồi thử lại.');
     } finally { this.busy.set(false); }
   }
   async save() {
