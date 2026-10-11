@@ -40,20 +40,20 @@ const PREFIX  = IS_TEST ? '[TEST] ' : '';
 // ─── Định nghĩa các loại thông báo ──────────────────────────────────────────
 const NOTIFICATION_TYPES = {
   'morning-start': {
-    title: 'SẮP TỚI GIỜ ĐIỂM DANH TIẾT 1 BUỔI SÁNG',
-    body:  'Vui lòng chuẩn bị điểm danh lớp học.',
+    title: 'ĐÃ ĐẾN GIỜ ĐIỂM DANH BUỔI SÁNG',
+    body:  'Đã đến giờ điểm danh. Thầy cô vui lòng điểm danh lớp học.',
   },
   'morning-end': {
-    title: 'SẮP HẾT GIỜ ĐIỂM DANH TIẾT 1 BUỔI SÁNG',
-    body:  'Hãy hoàn tất dữ liệu điểm danh.',
+    title: 'SẮP HẾT GIỜ ĐIỂM DANH BUỔI SÁNG',
+    body:  'Sắp hết giờ điểm danh. Thầy cô vui lòng hoàn tất điểm danh.',
   },
   'afternoon-start': {
-    title: 'SẮP TỚI GIỜ ĐIỂM DANH TIẾT 1 BUỔI CHIỀU',
-    body:  'Vui lòng chuẩn bị điểm danh lớp học.',
+    title: 'ĐÃ ĐẾN GIỜ ĐIỂM DANH BUỔI CHIỀU',
+    body:  'Đã đến giờ điểm danh. Thầy cô vui lòng điểm danh lớp học.',
   },
   'afternoon-end': {
-    title: 'SẮP HẾT GIỜ ĐIỂM DANH TIẾT 1 BUỔI CHIỀU',
-    body:  'Hãy hoàn tất dữ liệu điểm danh.',
+    title: 'SẮP HẾT GIỜ ĐIỂM DANH BUỔI CHIỀU',
+    body:  'Sắp hết giờ điểm danh. Thầy cô vui lòng hoàn tất điểm danh.',
   },
   'custom': {
     title: '🔔 [TEST] Thông báo thử nghiệm',
