@@ -5,11 +5,11 @@ const admin = require('firebase-admin');
 const fs = require('fs');
 const path = require('path');
 
-const serviceAccount = require(path.join(__dirname, '..', 'diem-danh-thcs-phu-long-firebase-adminsdk-fbsvc-0ce1d27380.json'));
+const serviceAccount = JSON.parse(fs.readFileSync(process.env.GOOGLE_APPLICATION_CREDENTIALS, 'utf8'));
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
-  storageBucket: 'diem-danh-thcs-phu-long.appspot.com'
+  storageBucket: 'du-an-phu-long.firebasestorage.app'
 });
 
 const bucket = admin.storage().bucket();

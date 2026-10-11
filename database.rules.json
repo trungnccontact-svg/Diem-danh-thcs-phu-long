@@ -24,20 +24,6 @@
         ".validate": "newData.hasChildren(['token','updatedAt','platform']) && newData.child('token').isString() && newData.child('token').val().length > 0"
       }
     },
-    "teacherChats": {
-      "$teacherUid": {
-        "messages": {
-          "$messageId": {
-            ".validate": "newData.hasChildren(['senderUid','senderName','text','createdAt']) && newData.child('senderUid').val() == auth.uid && newData.child('senderName').isString() && newData.child('text').isString() && newData.child('text').val().length > 0 && newData.child('text').val().length <= 2000 && newData.child('createdAt').isNumber() && newData.child('createdAt').val() <= now + 10000 && newData.child('senderName').val() == root.child('users').child(auth.uid).child('name').val()",
-            ".write": "auth != null && !data.exists() && newData.exists() && (auth.uid == $teacherUid || root.child('users').child(auth.uid).child('role').val() == 'admin') && root.child('users').child($teacherUid).child('role').val() == 'teacher'"
-          },
-          ".indexOn": [
-            "createdAt"
-          ]
-        },
-        ".read": "auth != null && (auth.uid == $teacherUid || root.child('users').child(auth.uid).child('role').val() == 'admin')"
-      }
-    },
     "teacherSchedules": {
       "$teacherUid": {
         ".validate": "newData.hasChildren(['enabled','content','repeat','date','start','end','updatedAt']) && newData.child('enabled').isBoolean() && newData.child('content').isString() && newData.child('content').val().length > 0 && newData.child('content').val().length <= 500 && (newData.child('repeat').val() == 'daily' || newData.child('repeat').val() == 'weekdays' || newData.child('repeat').val() == 'once') && newData.child('start').isString() && newData.child('start').val().matches(/^([01][0-9]|2[0-3]):[0-5][0-9]$/) && newData.child('end').isString() && newData.child('end').val().matches(/^([01][0-9]|2[0-3]):[0-5][0-9]$/) && newData.child('end').val() > newData.child('start').val() && newData.child('date').isString() && (newData.child('repeat').val() != 'once' || newData.child('date').val().matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/)) && newData.child('updatedAt').isNumber() && newData.child('updatedBy').val() == auth.uid",

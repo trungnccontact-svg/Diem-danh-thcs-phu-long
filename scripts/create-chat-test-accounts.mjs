@@ -3,8 +3,8 @@ import { initializeApp, cert, deleteApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getDatabase } from 'firebase-admin/database';
 
-const projectId = 'du-an-diem-danh-phu-long';
-const databaseURL = 'https://du-an-diem-danh-phu-long-default-rtdb.firebaseio.com';
+const projectId = 'du-an-phu-long';
+const databaseURL = 'https://du-an-phu-long-default-rtdb.asia-southeast1.firebasedatabase.app';
 const keyPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
 const password = process.env.CHAT_TEST_PASSWORD;
 if (!keyPath || !password || password.length < 6) {

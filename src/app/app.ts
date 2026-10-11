@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { TeacherChat } from './teacher-chat';
+import { TeacherNotifications } from './teacher-notifications';
 import { environment } from '../environments/environment';
 import { Component, computed, inject, signal, OnInit, OnDestroy, HostListener } from '@angular/core';
 import { FormsModule } from '@angular/forms';
@@ -62,12 +62,12 @@ interface ChatMessage {
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [CommonModule, FormsModule, TeacherChat],
+  imports: [CommonModule, FormsModule, TeacherNotifications],
   templateUrl: './app.html',
   styleUrl: './app.scss'
 })
 export class App implements OnInit, OnDestroy {
-  protected readonly chatDemo = ['localhost', '127.0.0.1'].includes(location.hostname) && new URLSearchParams(location.search).get('demo') === 'chat';
+  protected readonly notificationDemo = ['localhost', '127.0.0.1'].includes(location.hostname) && new URLSearchParams(location.search).get('demo') === 'notifications';
   protected readonly notificationSvc = inject(NotificationService);
   
   // Trạng thái chung
@@ -87,7 +87,7 @@ export class App implements OnInit, OnDestroy {
   protected readonly loggedIn = signal(false);
   protected readonly showLogin = signal(true);
   protected readonly loginError = signal('');
-  protected readonly selectedNav = signal(new URLSearchParams(location.search).has('chat') ? 'Chat' : 'Tổng quan');
+  protected readonly selectedNav = signal(new URLSearchParams(location.search).has('notifications') ? 'Thông báo' : 'Tổng quan');
   protected readonly mobileMenuOpen = signal(false);
 
   protected navigateTo(section: string) {
@@ -248,7 +248,7 @@ export class App implements OnInit, OnDestroy {
   ]);
 
   ngOnInit() {
-    if (this.chatDemo) { this.loading.set(false); return; }
+    if (this.notificationDemo) { this.loading.set(false); return; }
     // Tự động chọn phiên dựa trên giờ hiện tại
     const currentHour = new Date().getHours();
     this.selectedSession.set(currentHour < 12 ? 'morning' : 'afternoon');
@@ -333,9 +333,11 @@ export class App implements OnInit, OnDestroy {
     if (permission === 'denied') {
       alert('Quyền thông báo hiện đang bị TỪ CHỐI trên thiết bị này. Vui lòng vào Cài đặt -> Thông báo -> Phú Long trên điện thoại của bạn để bật lại.');
     } else if (permission === 'granted') {
-      alert('Bật nhận thông báo tự động thành công!');
+      alert(this.notificationSvc.pushStatus());
     } else if (Capacitor.isNativePlatform()) {
       alert('Chưa bật được thông báo native. Kiểm tra file google-services.json trong android/app.');
+    } else {
+      alert(this.notificationSvc.pushStatus());
     }
   }
 

@@ -1,11 +1,29 @@
-const { onValueCreated, onValueWritten } = require('firebase-functions/v2/database');
+const { onValueWritten } = require('firebase-functions/v2/database');
 const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { getDatabase } = require('firebase-admin/database');
 const { getMessaging } = require('firebase-admin/messaging');
 const { dueSchedule } = require('./chat-schedule');
+const { onCall, HttpsError } = require('firebase-functions/v2/https');
 
 const DATABASE_REGION = 'us-central1';
-const APP_URL = 'https://du-an-diem-danh-phu-long.web.app';
+const APP_URL = 'https://du-an-phu-long.web.app';
+
+exports.sendTeacherNotificationNow = onCall({ region: 'asia-southeast1' }, async request => {
+  if (!request.auth) throw new HttpsError('unauthenticated', 'Vui lòng đăng nhập.');
+  const { teacherUid, content, requestId } = request.data || {};
+  if (typeof teacherUid !== 'string' || !/^[^.#$\[\]/]{1,128}$/.test(teacherUid) || typeof content !== 'string' || !content.trim() || content.trim().length > 500 || typeof requestId !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(requestId)) {
+    throw new HttpsError('invalid-argument', 'Giáo viên hoặc nội dung không hợp lệ.');
+  }
+  const db = getDatabase();
+  const actor = (await db.ref(`users/${request.auth.uid}`).get()).val();
+  if (actor?.role !== 'admin' || (actor.viewOnlyUids?.length && !actor.viewOnlyUids.includes(teacherUid))) throw new HttpsError('permission-denied', 'Không có quyền gửi cho giáo viên này.');
+  const teacher = (await db.ref(`users/${teacherUid}`).get()).val();
+  if (teacher?.role !== 'teacher' || (actor.isTestAccount && !teacher.isTestAccount)) throw new HttpsError('permission-denied', 'Không thể gửi cho giáo viên này.');
+  const id = `immediate_${request.auth.uid}_${requestId}`;
+  await deliver(teacherUid, id, { type: 'teacher-reminder', teacherUid, title: 'Thông báo từ admin', body: content.trim() });
+  const log = (await db.ref(`notificationLogs/${teacherUid}/${id}`).get()).val();
+  return { status: log?.status || 'sending', accepted: log?.accepted || 0, codes: [...new Set((log?.results || []).filter(result => result.status === 'failed').map(result => result.code))] };
+});
 
 async function deliver(uid, id, notification, ttl = 3600) {
   const db = getDatabase();
@@ -32,7 +50,7 @@ async function deliver(uid, id, notification, ttl = 3600) {
         data: { type: notification.type, teacherUid: notification.teacherUid, notificationId: id },
         android: { priority: 'high', ttl: ttl * 1000, notification: { channelId: 'attendance-reminders', sound: 'default' } },
         apns: { headers: { 'apns-expiration': String(Math.floor(Date.now() / 1000) + ttl) }, payload: { aps: { sound: 'default' } } },
-        webpush: { headers: { TTL: String(ttl) }, fcmOptions: { link: `${APP_URL}/?chat=1&teacher=${encodeURIComponent(notification.teacherUid)}` } }
+        webpush: { headers: { TTL: String(ttl) }, fcmOptions: { link: `${APP_URL}/?notifications=1&teacher=${encodeURIComponent(notification.teacherUid)}` } }
       });
       for (let n = 0; n < response.responses.length; n++) {
         const r = response.responses[n];
@@ -48,20 +66,6 @@ async function deliver(uid, id, notification, ttl = 3600) {
     await log.update({ status: accepted ? 'accepted' : 'failed', accepted, failed: results.length - accepted, results, at: Date.now() });
   } catch (error) { await log.update({ status: 'failed', code: error.code || 'unknown', at: Date.now() }); throw error; }
 }
-
-exports.teacherChatNotification = onValueCreated({ ref: '/teacherChats/{teacherUid}/messages/{messageId}', region: DATABASE_REGION, retry: true }, async event => {
-  const db = getDatabase();
-  const message = event.data.val();
-  const teacherUid = event.params.teacherUid;
-  const sender = (await db.ref(`users/${message.senderUid}`).get()).val();
-  const id = `chat_${event.params.messageId}`;
-  const value = { type: 'teacher-chat', teacherUid, messageId: event.params.messageId, title: sender?.role === 'admin' ? 'Tin nhắn từ admin' : `Tin nhắn từ ${sender?.name || 'giáo viên'}`, body: message.text.slice(0, 200) };
-  if (sender?.role === 'admin') await deliver(teacherUid, id, value);
-  else if (sender?.role === 'teacher' && message.senderUid === teacherUid) {
-    const users = (await db.ref('users').get()).val() || {};
-    await Promise.all(Object.entries(users).filter(([, user]) => user.role === 'admin' && (!sender.isTestAccount || user.isTestAccount) && (!user.viewOnlyUids?.length || user.viewOnlyUids.includes(teacherUid))).map(([uid]) => deliver(uid, id, value)));
-  }
-});
 
 exports.teacherScheduleAudit = onValueWritten({ ref: '/teacherSchedules/{teacherUid}', region: DATABASE_REGION }, async event => {
   const schedule = event.data.after.val();

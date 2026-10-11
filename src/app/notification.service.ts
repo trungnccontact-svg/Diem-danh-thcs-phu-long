@@ -14,9 +14,19 @@ export class NotificationService {
   private inboxStop?: () => void;
   private foregroundStop?: () => void;
   private userId = '';
-  private deviceId = localStorage.getItem('phulong-device-id') || crypto.randomUUID();
+  private deviceId = localStorage.getItem('phulong-device-id') || this.createDeviceId();
   private token = '';
   private nativeListenersAttached = false;
+
+  private createDeviceId(): string {
+    if (typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+    // HTTP over the local network does not expose randomUUID, but allows getRandomValues.
+    const bytes = crypto.getRandomValues(new Uint8Array(16));
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    const hex = Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+  }
 
   watchInbox(userId: string) {
     if (this.userId === userId && this.inboxStop) return;
@@ -31,7 +41,7 @@ export class NotificationService {
   }
   async openNotification(id: string, teacherUid: string) {
     if (this.userId) await update(ref(getDatabase(getApp()), `userNotifications/${this.userId}/${id}`), { readAt: Date.now() });
-    window.location.assign('/?chat=1&teacher=' + encodeURIComponent(teacherUid));
+    window.location.assign('/?notifications=1&teacher=' + encodeURIComponent(teacherUid));
   }
   async disconnect() {
     this.inboxStop?.(); this.foregroundStop?.(); this.inboxStop = undefined; this.foregroundStop = undefined;
@@ -57,7 +67,12 @@ export class NotificationService {
       return;
     }
 
+    if (!window.isSecureContext) {
+      this.pushStatus.set('Địa chỉ HTTP qua Wi-Fi không hỗ trợ push. Mở https://du-an-phu-long.web.app trên thiết bị nhận và bật thông báo.');
+      return;
+    }
     if (!('Notification' in window) || !('serviceWorker' in navigator)) {
+      this.pushStatus.set('Trình duyệt không hỗ trợ push; vẫn nhận thông báo trong ứng dụng.');
       console.warn('[FCM Web] Trình duyệt không hỗ trợ thông báo.');
       return;
     }
@@ -92,6 +107,7 @@ export class NotificationService {
         });
         console.log('[FCM Web] Token đã lưu vào fcmTokens/' + userId);
       } else {
+        this.pushStatus.set('Chưa lấy được token push. Vui lòng thử bật thông báo lại.');
         console.warn('[FCM Web] Không lấy được token. Kiểm tra cấu hình VAPID key.');
       }
 
@@ -103,7 +119,7 @@ export class NotificationService {
           const notification = new Notification(title, {
             body: body ?? '',
             icon: '/school-logo.jpg',
-            tag: payload.data?.['type'] === 'teacher-chat' ? 'teacher-chat' : 'attendance-reminder',
+            tag: 'attendance-reminder',
           });
           notification.onclick = () => { window.focus(); if (payload.data?.['notificationId']) void this.openNotification(payload.data['notificationId'], payload.data['teacherUid']); notification.close(); };
         }

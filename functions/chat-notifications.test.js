@@ -13,7 +13,8 @@ function harness(values = {}, responses = []) {
     async set(value) { records.set(path, value); }
   }; } };
   const mockRequire = name => {
-    if (name === 'firebase-functions/v2/database') return { onValueCreated: (_,fn) => fn, onValueWritten: (_,fn) => fn };
+    if (name === 'firebase-functions/v2/https') return { onCall: (_, fn) => fn, HttpsError: class extends Error { constructor(code, message) { super(message); this.code = code; } } };
+    if (name === 'firebase-functions/v2/database') return { onValueWritten: (_,fn) => fn };
     if (name === 'firebase-functions/v2/scheduler') return { onSchedule: (_,fn) => fn };
     if (name === 'firebase-admin/database') return { getDatabase: () => db };
     if (name === 'firebase-admin/messaging') return { getMessaging: () => ({ async sendEachForMulticast(payload) { sends.push(payload); return { responses: responses.length ? responses : payload.tokens.map(() => ({ success: true, messageId: 'fcm-test' })) }; } }) };
@@ -21,38 +22,29 @@ function harness(values = {}, responses = []) {
   };
   const context = { exports: {}, require: mockRequire, console, Date };
   vm.runInNewContext(fs.readFileSync(require.resolve('./chat-notifications'), 'utf8'), context);
-  const event = (senderUid = 'admin', messageId = 'message-1') => ({ params: { teacherUid: 'teacher', messageId }, data: { val: () => ({ senderUid, text: 'Kiểm tra chat thật' }) } });
-  return { records, sends, functions: context.exports, event };
+  return { records, sends, functions: context.exports, deliver: context.deliver };
 }
 
 test('saves real inbox and no-token delivery log; retries after device registers', async () => {
-  const h = harness({ 'users/admin': { role: 'admin' } });
-  await h.functions.teacherChatNotification(h.event());
-  assert.equal(h.records.get('userNotifications/teacher/chat_message-1').body, 'Kiểm tra chat thật');
-  assert.equal(h.records.get('notificationLogs/teacher/chat_message-1').status, 'no-token');
+  const h = harness({});
+  await h.deliver('teacher', 'reminder-1', { type: 'teacher-reminder', teacherUid: 'teacher', title: 'Nhắc nhở', body: 'Kiểm tra thông báo' });
+  assert.equal(h.records.get('userNotifications/teacher/reminder-1').body, 'Kiểm tra thông báo');
+  assert.equal(h.records.get('notificationLogs/teacher/reminder-1').status, 'no-token');
   h.records.set('fcmDevices/teacher', { edge: { token: 'edge-token' } });
-  await h.functions.teacherChatNotification(h.event());
+  await h.deliver('teacher', 'reminder-1', { type: 'teacher-reminder', teacherUid: 'teacher', title: 'Nhắc nhở', body: 'Kiểm tra thông báo' });
   assert.equal(h.sends.length, 1);
-  assert.equal(h.records.get('notificationLogs/teacher/chat_message-1').status, 'accepted');
-  await h.functions.teacherChatNotification(h.event());
+  assert.equal(h.records.get('notificationLogs/teacher/reminder-1').status, 'accepted');
+  await h.deliver('teacher', 'reminder-1', { type: 'teacher-reminder', teacherUid: 'teacher', title: 'Nhắc nhở', body: 'Kiểm tra thông báo' });
   assert.equal(h.sends.length, 1, 'duplicate event does not send again after accepted');
 });
 
 test('targets distinct devices once and records per-device failure', async () => {
   const h = harness({ 'users/admin': { role: 'admin' }, 'fcmDevices/teacher': { edge: { token: 'one' }, chrome: { token: 'two' } }, 'fcmTokens/teacher/token': 'one', 'fcmDevices/teacher/chrome': { token: 'two' } }, [{ success: true, messageId: 'one-ok' }, { success: false, error: { code: 'messaging/registration-token-not-registered' } }]);
-  await h.functions.teacherChatNotification(h.event());
+  await h.deliver('teacher', 'reminder-1', { type: 'teacher-reminder', teacherUid: 'teacher', title: 'Nhắc nhở', body: 'Kiểm tra thông báo' });
   assert.equal(h.sends[0].tokens.length, 2);
-  assert.equal(h.records.get('notificationLogs/teacher/chat_message-1').accepted, 1);
-  assert.equal(h.records.get('notificationLogs/teacher/chat_message-1').failed, 1);
+  assert.equal(h.records.get('notificationLogs/teacher/reminder-1').accepted, 1);
+  assert.equal(h.records.get('notificationLogs/teacher/reminder-1').failed, 1);
   assert.equal(h.records.get('fcmDevices/teacher/chrome'), null);
-});
-
-test('test teacher notifies eligible test admin, not production admins', async () => {
-  const h = harness({ 'users/teacher': { role: 'teacher', isTestAccount: true, name: 'Teacher test' }, users: { realAdmin: { role: 'admin' }, testAdmin: { role: 'admin', isTestAccount: true, viewOnlyUids: ['teacher'] }, otherAdmin: { role: 'admin', isTestAccount: true, viewOnlyUids: ['other'] } } });
-  await h.functions.teacherChatNotification(h.event('teacher'));
-  assert.ok(h.records.has('userNotifications/testAdmin/chat_message-1'));
-  assert.equal(h.records.has('userNotifications/realAdmin/chat_message-1'), false);
-  assert.equal(h.records.has('userNotifications/otherAdmin/chat_message-1'), false);
 });
 
 test('schedule audit persists actor and configuration', async () => {
@@ -62,3 +54,18 @@ test('schedule audit persists actor and configuration', async () => {
   assert.equal(audit.actorUid, 'admin');
   assert.equal(audit.action, 'disabled');
 });
+
+ test('immediate notification requires admin scope and sends without a schedule', async () => {
+  const h = harness({ 'users/admin': { role: 'admin', viewOnlyUids: ['teacher'] }, 'users/teacher': { role: 'teacher' }, 'fcmDevices/teacher': { phone: { token: 'phone-token' } } });
+  const request = { auth: { uid: 'admin' }, data: { teacherUid: 'teacher', content: '  Gửi ngay  ', requestId: 'request-1' } };
+  await assert.rejects(() => h.functions.sendTeacherNotificationNow({ data: request.data }), error => error.code === 'unauthenticated');
+  await assert.rejects(() => h.functions.sendTeacherNotificationNow({ ...request, data: { ...request.data, teacherUid: 'other' } }), error => error.code === 'permission-denied');
+  await assert.rejects(() => h.functions.sendTeacherNotificationNow({ ...request, data: { ...request.data, content: ' ' } }), error => error.code === 'invalid-argument');
+  const result = await h.functions.sendTeacherNotificationNow(request);
+  assert.equal(result.status, 'accepted');
+  assert.equal(h.sends.length, 1);
+  assert.equal(h.sends[0].notification.body, 'Gửi ngay');
+  assert.equal(h.records.get('userNotifications/teacher/immediate_admin_request-1').body, 'Gửi ngay');
+  await h.functions.sendTeacherNotificationNow(request);
+  assert.equal(h.sends.length, 1);
+ });

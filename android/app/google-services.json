@@ -1,14 +1,13 @@
 {
   "project_info": {
-    "project_number": "173707383479",
-    "firebase_url": "https://diem-danh-thcs-phu-long-default-rtdb.firebaseio.com",
-    "project_id": "diem-danh-thcs-phu-long",
-    "storage_bucket": "diem-danh-thcs-phu-long.firebasestorage.app"
+    "project_number": "84292175302",
+    "project_id": "du-an-phu-long",
+    "storage_bucket": "du-an-phu-long.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:173707383479:android:dd27804148586fa7917332",
+        "mobilesdk_app_id": "1:84292175302:android:6f16b5a2cd500a1a999ec7",
         "android_client_info": {
           "package_name": "com.phulong.diemdanh"
         }
@@ -16,7 +15,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyDeLXxTJbxR3vPcEFgkJ31blxN3YXdxpRY"
+          "current_key": "AIzaSyA1X_MaCRRbUbAqblGAPqhrnaNDmSvL7WU"
         }
       ],
       "services": {

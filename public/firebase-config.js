@@ -1,10 +1,10 @@
 self.PHULONG_FIREBASE_CONFIG = {
-  "apiKey": "AIzaSyC4cRy7yDY3Iu9Ow_gWWvwuwIBVc9Sflns",
-  "authDomain": "du-an-diem-danh-phu-long.firebaseapp.com",
-  "projectId": "du-an-diem-danh-phu-long",
-  "storageBucket": "du-an-diem-danh-phu-long.firebasestorage.app",
-  "messagingSenderId": "974338905592",
-  "appId": "1:974338905592:web:a45420de92263147b3b20d",
-  "measurementId": "G-J2RZSZBMQW",
-  "databaseURL": "https://du-an-diem-danh-phu-long-default-rtdb.firebaseio.com"
+  "projectId": "du-an-phu-long",
+  "appId": "1:84292175302:web:609f53cec18e79c7999ec7",
+  "storageBucket": "du-an-phu-long.firebasestorage.app",
+  "apiKey": "AIzaSyDIqsbyXQffB4NrvsrVz3ItRgmlYO5GxRc",
+  "authDomain": "du-an-phu-long.firebaseapp.com",
+  "messagingSenderId": "84292175302",
+  "measurementId": "G-DS59D2ML41",
+  "databaseURL": "https://du-an-phu-long-default-rtdb.asia-southeast1.firebasedatabase.app"
 };

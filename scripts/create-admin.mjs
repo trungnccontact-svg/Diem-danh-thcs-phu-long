@@ -5,8 +5,8 @@ import { getAuth } from 'firebase-admin/auth';
 import { getDatabase } from 'firebase-admin/database';
 
 // 1. Cấu hình service account và database URL
-const saPath = path.resolve('diem-danh-thcs-phu-long-firebase-adminsdk-fbsvc-0ce1d27380.json');
-const databaseURL = 'https://diem-danh-thcs-phu-long-default-rtdb.firebaseio.com';
+const saPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+const databaseURL = 'https://du-an-phu-long-default-rtdb.asia-southeast1.firebasedatabase.app';
 
 if (!fs.existsSync(saPath)) {
   console.error(`❌ Không tìm thấy file service account tại: ${saPath}`);

@@ -10,10 +10,10 @@ const openRouterKey = defineSecret('OPENROUTER_API_KEY');
 Object.assign(exports, require('./chat-notifications'));
 
 const reminders = [
-  { schedule: '50 6 * * 1-5', title: 'SẮP TỚI GIỜ ĐIỂM DANH TIẾT 1 BUỔI SÁNG', body: 'Vui lòng chuẩn bị điểm danh lớp học.' },
-  { schedule: '40 7 * * 1-5', title: 'SẮP HẾT GIỜ ĐIỂM DANH TIẾT 1 BUỔI SÁNG', body: 'Hãy hoàn tất dữ liệu điểm danh.' },
-  { schedule: '10 13 * * 1-5', title: 'SẮP TỚI GIỜ ĐIỂM DANH TIẾT 1 BUỔI CHIỀU', body: 'Vui lòng chuẩn bị điểm danh lớp học.' },
-  { schedule: '55 13 * * 1-5', title: 'SẮP HẾT GIỜ ĐIỂM DANH TIẾT 1 BUỔI CHIỀU', body: 'Hãy hoàn tất dữ liệu điểm danh.' }
+  { schedule: '0 7 * * *', title: 'ĐÃ ĐẾN GIỜ ĐIỂM DANH BUỔI SÁNG', body: 'Đã đến giờ điểm danh. Thầy cô vui lòng điểm danh lớp học.' },
+  { schedule: '30 10 * * *', title: 'SẮP HẾT GIỜ ĐIỂM DANH BUỔI SÁNG', body: 'Sắp hết giờ điểm danh. Thầy cô vui lòng hoàn tất điểm danh.' },
+  { schedule: '15 13 * * *', title: 'ĐÃ ĐẾN GIỜ ĐIỂM DANH BUỔI CHIỀU', body: 'Đã đến giờ điểm danh. Thầy cô vui lòng điểm danh lớp học.' },
+  { schedule: '50 16 * * *', title: 'SẮP HẾT GIỜ ĐIỂM DANH BUỔI CHIỀU', body: 'Sắp hết giờ điểm danh. Thầy cô vui lòng hoàn tất điểm danh.' }
 ];
 
 async function sendReminder(title, body) {
@@ -108,7 +108,7 @@ exports.askAssistant = onRequest({ secrets: [openRouterKey], cors: true }, async
   const models = ['openrouter/free', 'meta-llama/llama-3.3-8b-instruct:free'];
   for (const model of models) {
     try {
-      const response = await fetch('https://openrouter.ai/api/v1/chat/completions', { method: 'POST', headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json', 'HTTP-Referer': 'https://diem-danh-hoc-sinh-thcs-pl.web.app' }, body: JSON.stringify({ model, messages: [{ role: 'user', content: prompt }], temperature: 0.3 }) });
+      const response = await fetch('https://openrouter.ai/api/v1/chat/completions', { method: 'POST', headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json', 'HTTP-Referer': 'https://du-an-phu-long.web.app' }, body: JSON.stringify({ model, messages: [{ role: 'user', content: prompt }], temperature: 0.3 }) });
       if (response.ok) {
         const data = await response.json();
         return res.json({ answer: data.choices?.[0]?.message?.content || 'Tôi chưa có câu trả lời phù hợp.', model });
