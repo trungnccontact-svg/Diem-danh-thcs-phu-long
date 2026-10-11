@@ -69,13 +69,15 @@ const dbUrl    = process.env.FIREBASE_DATABASE_URL;
 
 if (!credPath || !dbUrl) {
   console.error('❌ Thiếu biến môi trường!');
-  console.error('   Set-Item Env:GOOGLE_APPLICATION_CREDENTIALS "n:\\SOURCE-diem-danh-phu-long\\diem-danh-thcs-phu-long-firebase-adminsdk-fbsvc-0ce1d27380.json"');
-  console.error('   Set-Item Env:FIREBASE_DATABASE_URL "https://diem-danh-thcs-phu-long-default-rtdb.firebaseio.com"');
+  console.error('   GOOGLE_APPLICATION_CREDENTIALS phải trỏ đến service account của du-an-phu-long.');
+  console.error('   Set-Item Env:FIREBASE_DATABASE_URL "https://du-an-phu-long-default-rtdb.asia-southeast1.firebasedatabase.app"');
   process.exit(1);
 }
 
 const serviceAccount = JSON.parse(fs.readFileSync(credPath, 'utf8'));
-initializeApp({ credential: cert(serviceAccount), databaseURL: dbUrl });
+if (serviceAccount.project_id !== 'du-an-phu-long') throw new Error('Service account phải thuộc dự án du-an-phu-long.');
+if (!dbUrl.startsWith('https://du-an-phu-long-default-rtdb.')) throw new Error('Database URL phải thuộc du-an-phu-long.');
+initializeApp({ credential: cert(serviceAccount), projectId: 'du-an-phu-long', databaseURL: dbUrl });
 
 const messaging = getMessaging();
 
