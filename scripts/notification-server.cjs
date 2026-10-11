@@ -2,6 +2,9 @@
 const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
+if (typeof process.loadEnvFile === 'function' && fs.existsSync(path.resolve(__dirname, '../.env'))) {
+  process.loadEnvFile(path.resolve(__dirname, '../.env'));
+}
 const { createRequire } = require('node:module');
 const requireFunctions = createRequire(path.resolve(__dirname, '../functions/package.json'));
 const { initializeApp, cert, refreshToken, applicationDefault } = requireFunctions('firebase-admin/app');
@@ -29,6 +32,7 @@ async function processRequest(snapshot) {
   }
 }
 requests.on('child_added', snapshot => { void processRequest(snapshot); }, error => console.error('Notification queue unavailable:', error.code));
+require('./attendance-image.cjs').startAttendanceImageWorker(getDatabase());
 http.createServer(async (req, res) => {
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
   res.setHeader('Cache-Control', 'no-store');

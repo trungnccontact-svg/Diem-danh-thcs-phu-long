@@ -45,6 +45,7 @@ Thumbs.db
 
 # Firebase cache
 .firebase/
+firebase-debug.log*
 
 # Firebase Service Account keys — KHÔNG được commit lên git
 *firebase-adminsdk*.json

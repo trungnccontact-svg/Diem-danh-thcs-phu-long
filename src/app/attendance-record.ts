@@ -1,6 +1,6 @@
 export interface AbsenteeDetail {
   name: string;
-  status: 'Có phép' | 'Không phép' | 'Đi trễ';
+  status: 'Có phép' | 'Không phép' | 'Đi trễ' | '';
 }
 
 export interface AttendanceRecord {

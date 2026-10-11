@@ -9,6 +9,8 @@ import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, User 
 import { getDatabase, ref, onValue, get, push, runTransaction } from 'firebase/database';
 import { AbsenteeDetail, AttendanceRecord, attendanceClassKey, attendanceVersion, findClassRecord, mergeAttendanceRecords, canSaveAttendance } from './attendance-record';
 import { ATTENDANCE_WINDOWS, attendanceTimeStatus } from './attendance-time';
+import { AttendancePhoto } from './attendance-photo';
+import { BoardAttendance } from './attendance-photo.service';
 import { NotificationService } from './notification.service';
 import { Capacitor } from '@capacitor/core';
 import { app as firebaseApp } from '../firebase'; // Đảm bảo Firebase được import để chạy initializeApp() trước
@@ -48,7 +50,7 @@ interface ChatMessage {
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [CommonModule, FormsModule, TeacherNotifications],
+  imports: [CommonModule, FormsModule, TeacherNotifications, AttendancePhoto],
   templateUrl: './app.html',
   styleUrl: './app.scss'
 })
@@ -95,6 +97,8 @@ export class App implements OnInit, OnDestroy {
   protected readonly filter = signal('Tất cả');
   protected readonly submitted = signal(false);
   protected readonly attendanceSaving = signal(false);
+  protected readonly attendancePhotoBusy = signal(false);
+  protected readonly attendancePhotoWarnings = signal<string[]>([]);
   protected readonly attendanceEditing = signal(false);
   protected readonly attendanceNotice = signal('');
   protected readonly attendanceConflict = signal<AttendanceRecord | null>(null);
@@ -350,7 +354,8 @@ export class App implements OnInit, OnDestroy {
   }
 
   protected changeSession(session: 'morning' | 'afternoon') {
-    if (this.attendanceSaving()) return;
+    if (this.attendanceSaving() || this.attendancePhotoBusy()) return;
+    this.attendancePhotoWarnings.set([]);
     this.attendanceEditing.set(false);
     this.reviewedAttendance = null;
     this.attendanceNotice.set('');
@@ -492,6 +497,27 @@ export class App implements OnInit, OnDestroy {
     this.editClassAttendance(this.dbAttendance()[this.currentUserProfile()!.uid]);
   }
 
+  protected applyAttendancePhoto(result: BoardAttendance) {
+    if (!this.getTimeStatus(this.selectedSession()).allowed) {
+      this.attendanceNotice.set('Đã hết giờ điểm danh. Dữ liệu đọc từ ảnh chưa được áp dụng.');
+      return;
+    }
+    const reviewed = this.reviewedAttendance;
+    this.className = result.className || '';
+    this.onAttendanceClassChange();
+    if (reviewed?.classKey === attendanceClassKey(this.className)) this.reviewedAttendance = reviewed;
+    this.total = result.total;
+    this.present = result.present;
+    this.absentees = (result.absentees || []).map(item => ({ ...item }));
+    this.absentCount = result.total !== null && result.present !== null ? result.total - result.present : (result.absentCount ?? this.absentees.length);
+    while (this.absentees.length < this.absentCount) this.absentees.push({ name: '', status: '' });
+    // Preserve every name read from the board; ask the teacher to fix any count mismatch.
+    this.absentNames = this.absentees.map(item => item.name);
+    this.attendancePhotoWarnings.set(result.warnings || []);
+    this.errors = {};
+    this.attendanceNotice.set('Đã điền dữ liệu từ ảnh. Thầy cô kiểm tra tên lớp, sĩ số và học sinh vắng trước khi lưu.');
+  }
+
   private clearListeners() {
     this.dbListeners.forEach(stop => stop());
     this.dbListeners = [];
@@ -627,10 +653,16 @@ export class App implements OnInit, OnDestroy {
     if (this.present === null || this.present === undefined || String(this.present).trim() === '') {
       this.errors.present = 'Không được để trống số lượng có mặt';
       isValid = false;
+    } else if (!Number.isInteger(Number(this.present)) || Number(this.present) < 0 || (this.total !== null && Number(this.present) > Number(this.total))) {
+      this.errors.present = 'Số có mặt phải là số nguyên từ 0 đến tổng sĩ số';
+      isValid = false;
     }
 
     if (this.total === null || this.total === undefined || String(this.total).trim() === '') {
       this.errors.total = 'Không được để trống tổng sĩ số';
+      isValid = false;
+    } else if (!Number.isInteger(Number(this.total)) || Number(this.total) <= 0) {
+      this.errors.total = 'Tổng sĩ số phải là số nguyên lớn hơn 0';
       isValid = false;
     }
 
@@ -642,13 +674,17 @@ export class App implements OnInit, OnDestroy {
         isValid = false;
       }
     }
+    if (this.absentees.length !== this.absentCount || this.absentees.some(abs => !abs.status)) {
+      this.errors.absentees = 'Kiểm tra số học sinh vắng và chọn trạng thái cho từng học sinh.';
+      isValid = false;
+    }
 
     return isValid;
   }
 
   async submitAttendance() {
     const profile = this.currentUserProfile();
-    if (!profile || this.attendanceSaving()) return;
+    if (!profile || this.attendanceSaving() || this.attendancePhotoBusy()) return;
 
     const timeCheck = this.getTimeStatus(this.selectedSession());
     if (!timeCheck.allowed) {

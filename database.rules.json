@@ -111,6 +111,33 @@
           ".validate": "$session.matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}_(morning|afternoon)$/) && $class.matches(/^[6-9]A[1-9][0-9]*$/) && newData.hasChildren(['teacherUid','teacherName','className','present','total','checkedAt','revision','updatedAt']) && newData.child('teacherName').val() == root.child('users').child(auth.uid).child('name').val() && newData.child('className').val() == $class && newData.child('present').isNumber() && newData.child('total').isNumber() && newData.child('total').val() > 0 && newData.child('present').val() >= 0 && newData.child('present').val() <= newData.child('total').val() && newData.child('checkedAt').isString() && newData.child('revision').isString() && newData.child('revision').val().length > 0 && newData.child('revision').val().length <= 128 && newData.child('updatedAt').isNumber() && newData.child('updatedAt').val() <= now + 10000"
         }
       }
+    },
+    "attendanceImageRequests": {
+      "$uid": {
+        ".read": "auth != null && auth.uid == $uid",
+        "$requestId": {
+          ".write": "auth != null && auth.uid == $uid && root.child('users').child(auth.uid).child('role').val() == 'teacher' && !data.exists()",
+          ".validate": "newData.hasChildren(['actorUid','image','mimeType','status','createdAt']) && newData.child('actorUid').val() == auth.uid && newData.child('image').isString() && newData.child('image').val().length > 0 && newData.child('image').val().length <= 1228800 && (newData.child('mimeType').val() == 'image/jpeg' || newData.child('mimeType').val() == 'image/png' || newData.child('mimeType').val() == 'image/webp') && newData.child('status').val() == 'pending' && newData.child('createdAt').isNumber() && newData.child('createdAt').val() <= now + 10000 && newData.child('createdAt').val() >= now - 120000",
+          "actorUid": {
+            ".validate": true
+          },
+          "image": {
+            ".validate": true
+          },
+          "mimeType": {
+            ".validate": true
+          },
+          "status": {
+            ".validate": true
+          },
+          "createdAt": {
+            ".validate": true
+          },
+          "$other": {
+            ".validate": false
+          }
+        }
+      }
     }
   }
 }
