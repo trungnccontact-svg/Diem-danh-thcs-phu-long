@@ -101,4 +101,15 @@ describe('Biểu mẫu chỉnh sửa lớp của giáo viên khác', () => {
     app.onAttendanceClassChange();
     expect(app.reviewedAttendance).toBeNull();
   });
+
+  it('unsubscribes old session listeners so morning data cannot overwrite afternoon data', () => {
+    const { app } = createForm();
+    const stopMorning = jasmine.createSpy('stopMorning');
+    const stopClasses = jasmine.createSpy('stopClasses');
+    app.dbListeners = [stopMorning, stopClasses];
+    app.clearListeners();
+    expect(stopMorning).toHaveBeenCalledTimes(1);
+    expect(stopClasses).toHaveBeenCalledTimes(1);
+    expect(app.dbListeners).toEqual([]);
+  });
 });

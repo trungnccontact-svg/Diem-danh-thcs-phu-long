@@ -6,7 +6,7 @@ import { FormsModule } from '@angular/forms';
 import * as XLSX from 'xlsx-js-style';
 import { getApp } from 'firebase/app';
 import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, User } from 'firebase/auth';
-import { getDatabase, ref, onValue, off, get, push, runTransaction } from 'firebase/database';
+import { getDatabase, ref, onValue, get, push, runTransaction } from 'firebase/database';
 import { AbsenteeDetail, AttendanceRecord, attendanceClassKey, attendanceVersion, findClassRecord, mergeAttendanceRecords, canSaveAttendance } from './attendance-record';
 import { NotificationService } from './notification.service';
 import { Capacitor } from '@capacitor/core';
@@ -133,7 +133,7 @@ export class App implements OnInit, OnDestroy {
   // Dữ liệu Realtime (Lazy initialization)
   private get db() { return getDatabase(firebaseApp); }
   private get auth() { return getAuth(firebaseApp); }
-  private dbListeners: { path: string; cb: any }[] = [];
+  private dbListeners: (() => void)[] = [];
 
   // Dữ liệu đồng bộ
   protected readonly dbTeachers = signal<TeacherData[]>([]);
@@ -421,7 +421,7 @@ export class App implements OnInit, OnDestroy {
       }
       this.dbTeachers.set(teachersList);
     });
-    this.dbListeners.push({ path: 'users', cb: usersCallback });
+    this.dbListeners.push(usersCallback);
 
     // 2. Đồng bộ kết quả điểm danh của ngày hôm nay theo phiên
     const sessionSuffix = this.selectedSession();
@@ -455,13 +455,13 @@ export class App implements OnInit, OnDestroy {
       legacyLoaded = true;
       syncAttendance();
     });
-    this.dbListeners.push({ path: attPath, cb: attCallback });
+    this.dbListeners.push(attCallback);
     const classCallback = onValue(ref(this.db, classPath), snapshot => {
       this.classAttendance = snapshot.val() || {};
       classesLoaded = true;
       syncAttendance();
     });
-    this.dbListeners.push({ path: classPath, cb: classCallback });
+    this.dbListeners.push(classCallback);
   }
 
   private loadAttendanceForm(record: AttendanceRecord) {
@@ -507,10 +507,7 @@ export class App implements OnInit, OnDestroy {
   }
 
   private clearListeners() {
-    this.dbListeners.forEach(listener => {
-      const listenerRef = ref(this.db, listener.path);
-      off(listenerRef, 'value', listener.cb);
-    });
+    this.dbListeners.forEach(stop => stop());
     this.dbListeners = [];
   }
 
