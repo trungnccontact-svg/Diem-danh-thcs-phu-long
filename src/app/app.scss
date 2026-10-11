@@ -704,3 +704,8 @@ td { border-top:1px solid #eef1f4; padding:13px 16px; font-size:11px; color:#526
 
 
 .live-notification{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:16px 24px;background:#e1f4f1;border-bottom:1px solid #b9ded8}.live-notification button{padding:8px 14px;border:1px solid #0c9295;border-radius:8px;background:#fff;color:#087d80;cursor:pointer}
+.duplicate-attendance { margin: 18px 0; padding: 18px; border: 1px solid #e6be78; border-radius: 12px; background: #fff8e9; color: #785315; }
+.duplicate-attendance p { margin: 8px 0; }
+.duplicate-attendance .secondary-button { margin-top: 12px; }
+.attendance-notice { margin: 12px 0; color: #087d80; }
+.card-actions button:disabled { opacity: .55; cursor: not-allowed; }

@@ -6,7 +6,8 @@ import { FormsModule } from '@angular/forms';
 import * as XLSX from 'xlsx-js-style';
 import { getApp } from 'firebase/app';
 import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, User } from 'firebase/auth';
-import { getDatabase, ref, onValue, off, set, get } from 'firebase/database';
+import { getDatabase, ref, onValue, off, get, push, runTransaction } from 'firebase/database';
+import { AbsenteeDetail, AttendanceRecord, attendanceClassKey, attendanceVersion, findClassRecord, mergeAttendanceRecords, canSaveAttendance } from './attendance-record';
 import { NotificationService } from './notification.service';
 import { Capacitor } from '@capacitor/core';
 import { app as firebaseApp } from '../firebase'; // Đảm bảo Firebase được import để chạy initializeApp() trước
@@ -23,22 +24,6 @@ interface TeacherData {
   role: Role;
   isTestAccount?: boolean;  // tài khoản test: bỏ qua ràng buộc thời gian điểm danh
   viewOnlyUids?: string[];  // admin test: chỉ hiển thị các teacher trong danh sách này
-}
-
-interface AbsenteeDetail {
-  name: string;
-  status: 'Có phép' | 'Không phép' | 'Đi trễ';
-}
-
-interface AttendanceRecord {
-  teacherUid: string;
-  teacherName: string;
-  className: string;
-  present: number;
-  total: number;
-  absentNames: string[];
-  absentees?: AbsenteeDetail[];
-  checkedAt: string;
 }
 
 interface TeacherUIModel {
@@ -72,7 +57,7 @@ export class App implements OnInit, OnDestroy {
   
   // Trạng thái chung
   protected readonly today = new Intl.DateTimeFormat('vi-VN', { dateStyle: 'full' }).format(new Date());
-  protected readonly todayStr = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+  protected readonly todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
   protected readonly selectedDay = signal(String(new Date().getDate()).padStart(2, '0'));
   protected readonly selectedMonth = signal(String(new Date().getMonth() + 1).padStart(2, '0'));
   protected readonly selectedYear = signal(String(new Date().getFullYear()));
@@ -104,6 +89,13 @@ export class App implements OnInit, OnDestroy {
   }
   protected readonly filter = signal('Tất cả');
   protected readonly submitted = signal(false);
+  protected readonly attendanceSaving = signal(false);
+  protected readonly attendanceEditing = signal(false);
+  protected readonly attendanceNotice = signal('');
+  protected readonly attendanceConflict = signal<AttendanceRecord | null>(null);
+  private reviewedAttendance: { classKey: string; version: string } | null = null;
+  private legacyAttendance: Record<string, AttendanceRecord> = {};
+  private classAttendance: Record<string, AttendanceRecord> = {};
   protected readonly showChat = signal(false);
   protected readonly loading = signal(true);
   protected readonly cooldownTime = signal(0);
@@ -287,11 +279,6 @@ export class App implements OnInit, OnDestroy {
           
           // Đăng ký realtime listeners
           this.setupRealtimeSync();
-          
-          // Kiểm tra xem giáo viên này đã nộp điểm danh hôm nay chưa
-          if (profile.role !== 'admin') {
-            this.checkSelfAttendance(user.uid);
-          }
         } else {
           this.loginError.set('Tài khoản không tồn tại trên hệ thống dữ liệu.');
           this.logout();
@@ -349,13 +336,15 @@ export class App implements OnInit, OnDestroy {
   }
 
   protected changeSession(session: 'morning' | 'afternoon') {
+    if (this.attendanceSaving()) return;
+    this.attendanceEditing.set(false);
+    this.reviewedAttendance = null;
+    this.attendanceNotice.set('');
+    this.attendanceConflict.set(null);
+    this.submitted.set(false);
     this.selectedSession.set(session);
     if (this.loggedIn()) {
       this.setupRealtimeSync();
-      const profile = this.currentUserProfile();
-      if (profile && profile.role !== 'admin') {
-        this.checkSelfAttendance(profile.uid);
-      }
     }
   }
 
@@ -436,7 +425,24 @@ export class App implements OnInit, OnDestroy {
 
     // 2. Đồng bộ kết quả điểm danh của ngày hôm nay theo phiên
     const sessionSuffix = this.selectedSession();
-    const attPath = `attendance/${this.selectedDateStr()}_${sessionSuffix}`;
+    const date = this.activeRole() === 'teacher' ? this.todayStr : this.selectedDateStr();
+    const attPath = `attendance/${date}_${sessionSuffix}`;
+    const classPath = `classAttendance/${date}_${sessionSuffix}`;
+    this.legacyAttendance = {};
+    this.classAttendance = {};
+    let legacyLoaded = false;
+    let classesLoaded = false;
+    const syncAttendance = () => {
+      if (!legacyLoaded || !classesLoaded) return;
+      const records = mergeAttendanceRecords(this.legacyAttendance, this.classAttendance);
+      this.dbAttendance.set(records);
+      const profile = this.currentUserProfile();
+      if (profile?.role === 'teacher' && !this.attendanceEditing() && !this.attendanceSaving()) {
+        const myRecord = records[profile.uid];
+        if (myRecord) this.loadAttendanceForm(myRecord);
+        this.submitted.set(!!myRecord);
+      }
+    };
     const attRef = ref(this.db, attPath);
     const attCallback = onValue(attRef, (snapshot) => {
       const records: Record<string, AttendanceRecord> = {};
@@ -445,44 +451,59 @@ export class App implements OnInit, OnDestroy {
           records[child.key!] = child.val() as AttendanceRecord;
         });
       }
-      this.dbAttendance.set(records);
-      
-      // Cập nhật lại UI cá nhân nếu giáo viên thay đổi dữ liệu điểm danh trên thiết bị khác
-      const profile = this.currentUserProfile();
-      if (profile && profile.uid) {
-        const myRecord = records[profile.uid];
-        if (myRecord) {
-          this.className = myRecord.className;
-          this.present = myRecord.present;
-          this.total = myRecord.total;
-          this.absentNames = myRecord.absentNames || [];
-          this.absentees = myRecord.absentees || (myRecord.absentNames ? myRecord.absentNames.map(name => ({ name, status: 'Không phép' })) : []);
-          this.absentCount = myRecord.total - myRecord.present;
-          this.submitted.set(true);
-        } else {
-          this.submitted.set(false);
-        }
-      }
+      this.legacyAttendance = records;
+      legacyLoaded = true;
+      syncAttendance();
     });
     this.dbListeners.push({ path: attPath, cb: attCallback });
+    const classCallback = onValue(ref(this.db, classPath), snapshot => {
+      this.classAttendance = snapshot.val() || {};
+      classesLoaded = true;
+      syncAttendance();
+    });
+    this.dbListeners.push({ path: classPath, cb: classCallback });
   }
 
-  private async checkSelfAttendance(uid: string) {
-    const sessionSuffix = this.selectedSession();
-    const selfAttRef = ref(this.db, `attendance/${this.todayStr}_${sessionSuffix}/${uid}`);
-    const snapshot = await get(selfAttRef);
-    if (snapshot.exists()) {
-      const data = snapshot.val();
-      this.className = data.className;
-      this.present = data.present;
-      this.total = data.total;
-      this.absentNames = data.absentNames || [];
-      this.absentees = data.absentees || (data.absentNames ? data.absentNames.map((name: string) => ({ name, status: 'Không phép' })) : []);
-      this.absentCount = data.total - data.present;
-      this.submitted.set(true);
-    } else {
-      this.submitted.set(false);
-    }
+  private loadAttendanceForm(record: AttendanceRecord) {
+    this.className = record.className;
+    this.present = record.present;
+    this.total = record.total;
+    this.absentNames = [...(record.absentNames || [])];
+    this.absentees = record.absentees?.map(abs => ({ ...abs })) || this.absentNames.map(name => ({ name, status: 'Không phép' }));
+    this.absentCount = record.total - record.present;
+  }
+
+  protected get duplicateAttendance(): AttendanceRecord | null {
+    const record = this.classAttendance[attendanceClassKey(this.className)] || findClassRecord(this.legacyAttendance, this.className);
+    return record && record.teacherUid !== this.currentUserProfile()?.uid ? record : null;
+  }
+
+  protected get hasReviewedDuplicate(): boolean {
+    const record = this.duplicateAttendance;
+    return !!record && this.reviewedAttendance?.classKey === attendanceClassKey(this.className) && this.reviewedAttendance.version === attendanceVersion(record);
+  }
+
+  protected onAttendanceClassChange() {
+    this.clearError('className');
+    this.reviewedAttendance = null;
+    this.attendanceNotice.set('');
+    this.attendanceConflict.set(null);
+    this.attendanceEditing.set(true);
+  }
+
+  protected editClassAttendance(record = this.duplicateAttendance) {
+    if (!record || this.attendanceSaving() || !this.getTimeStatus(this.selectedSession()).allowed) return;
+    this.loadAttendanceForm(record);
+    this.reviewedAttendance = { classKey: attendanceClassKey(record.className), version: attendanceVersion(record) };
+    this.attendanceEditing.set(true);
+    this.submitted.set(false);
+    this.errors = {};
+    this.attendanceConflict.set(null);
+    this.attendanceNotice.set('Đã tải dữ liệu điểm danh. Khi lưu, bản điểm danh của lớp sẽ được cập nhật theo thông tin thầy cô nhập.');
+  }
+
+  protected editSelfAttendance() {
+    this.editClassAttendance(this.dbAttendance()[this.currentUserProfile()!.uid]);
   }
 
   private clearListeners() {
@@ -597,6 +618,8 @@ export class App implements OnInit, OnDestroy {
     this.loggedIn.set(false);
     this.showLogin.set(true);
     this.submitted.set(false);
+    this.attendanceEditing.set(false);
+    this.reviewedAttendance = null;
     this.loading.set(false);
   }
 
@@ -642,11 +665,17 @@ export class App implements OnInit, OnDestroy {
 
   async submitAttendance() {
     const profile = this.currentUserProfile();
-    if (!profile) return;
+    if (!profile || this.attendanceSaving()) return;
 
     const timeCheck = this.getTimeStatus(this.selectedSession());
     if (!timeCheck.allowed) {
       alert('Không thể điểm danh: ' + timeCheck.message);
+      return;
+    }
+
+    const classKey = attendanceClassKey(this.className);
+    if (!/^[6-9]A[1-9][0-9]*$/.test(classKey)) {
+      this.errors.className = 'Tên lớp không hợp lệ. Ví dụ: 6A1, 7A2.';
       return;
     }
 
@@ -666,22 +695,57 @@ export class App implements OnInit, OnDestroy {
     const record: AttendanceRecord = {
       teacherUid: profile.uid,
       teacherName: profile.name,
-      className: this.className,
+      className: classKey,
       present: this.present!,
       total: this.total!,
       absentNames: this.absentees.map(abs => abs.name.trim()),
       absentees: this.absentees.map(abs => ({ name: abs.name.trim(), status: abs.status })),
-      checkedAt: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+      checkedAt: new Date().toLocaleTimeString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit' }),
+      revision: push(ref(this.db, 'classAttendance')).key!,
+      updatedAt: Date.now()
     };
 
+    this.attendanceSaving.set(true);
+    this.attendanceNotice.set('');
     try {
-      // Lưu kết quả điểm danh vào Firebase Realtime Database theo phiên
-      const sessionSuffix = this.selectedSession();
-      const attendanceRef = ref(this.db, `attendance/${this.todayStr}_${sessionSuffix}/${profile.uid}`);
-      await set(attendanceRef, record);
+      const sessionKey = `${this.todayStr}_${this.selectedSession()}`;
+      const attendanceRef = ref(this.db, `classAttendance/${sessionKey}/${classKey}`);
+      const initial = (await get(attendanceRef)).val() as AttendanceRecord | null;
+      const legacySnapshot = await get(ref(this.db, `attendance/${sessionKey}`));
+      const legacyRecord = findClassRecord(legacySnapshot.val() || {}, classKey);
+      const reviewed = this.reviewedAttendance?.classKey === classKey ? this.reviewedAttendance.version : null;
+      const result = await runTransaction(attendanceRef, current => {
+        const existing = (current || initial || legacyRecord) as AttendanceRecord | null;
+        if (!canSaveAttendance(existing, profile.uid, reviewed)) {
+          return;
+        }
+        return record;
+      }, { applyLocally: false });
+      if (!result.committed) {
+        // Refresh the warning even when another device saved after the form was opened.
+        const latest = await get(attendanceRef);
+        const conflict = (latest.val() || initial || legacyRecord) as AttendanceRecord | null;
+        if (latest.exists()) this.classAttendance[classKey] = latest.val();
+        else if (conflict) this.legacyAttendance[conflict.teacherUid] = conflict;
+        this.reviewedAttendance = null;
+        this.attendanceConflict.set(latest.val() || conflict);
+        this.attendanceEditing.set(true);
+        this.attendanceNotice.set(conflict?.teacherUid !== profile.uid
+          ? 'Lớp này đã được giáo viên khác điểm danh. Nhấn Chỉnh sửa để xem và nhập lại.'
+          : 'Dữ liệu đã thay đổi trên thiết bị khác. Nhấn Chỉnh sửa để xem lại trước khi lưu.');
+        return;
+      }
+      this.classAttendance[classKey] = record;
+      this.dbAttendance.set(mergeAttendanceRecords(this.legacyAttendance, this.classAttendance));
+      this.loadAttendanceForm(record);
+      this.attendanceEditing.set(false);
+      this.reviewedAttendance = null;
+      this.attendanceConflict.set(null);
       this.submitted.set(true);
     } catch (err: any) {
       alert('Không thể nộp điểm danh: ' + err.message);
+    } finally {
+      this.attendanceSaving.set(false);
     }
   }
 

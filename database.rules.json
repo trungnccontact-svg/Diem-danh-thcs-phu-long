@@ -102,6 +102,15 @@
           ".validate": true
         }
       }
+    },
+    "classAttendance": {
+      ".read": "auth != null",
+      "$session": {
+        "$class": {
+          ".write": "auth != null && newData.exists() && (root.child('users').child(auth.uid).child('role').val() == 'teacher' || root.child('users').child(auth.uid).child('role').val() == 'admin') && newData.child('teacherUid').val() == auth.uid",
+          ".validate": "$session.matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}_(morning|afternoon)$/) && $class.matches(/^[6-9]A[1-9][0-9]*$/) && newData.hasChildren(['teacherUid','teacherName','className','present','total','checkedAt','revision','updatedAt']) && newData.child('teacherName').val() == root.child('users').child(auth.uid).child('name').val() && newData.child('className').val() == $class && newData.child('present').isNumber() && newData.child('total').isNumber() && newData.child('total').val() > 0 && newData.child('present').val() >= 0 && newData.child('present').val() <= newData.child('total').val() && newData.child('checkedAt').isString() && newData.child('revision').isString() && newData.child('revision').val().length > 0 && newData.child('revision').val().length <= 128 && newData.child('updatedAt').isNumber() && newData.child('updatedAt').val() <= now + 10000"
+        }
+      }
     }
   }
 }
