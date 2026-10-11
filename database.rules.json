@@ -12,7 +12,7 @@
       "$date": {
         "$teacherUid": {
           ".read": "auth != null",
-          ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() == 'admin' || auth.uid == $teacherUid)",
+          ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() == 'admin' || auth.uid == $teacherUid) && (root.child('users').child(auth.uid).child('role').val() == 'admin' || root.child('users').child(auth.uid).child('isTestAccount').val() == true || ($date.matches(/.*_morning$/) && ((now / 60000 + 420) % 1440) >= 420 && ((now / 60000 + 420) % 1440) < 640) || ($date.matches(/.*_afternoon$/) && ((now / 60000 + 420) % 1440) >= 790 && ((now / 60000 + 420) % 1440) < 1020))",
           ".validate": "newData.hasChildren(['teacherUid','teacherName','className','present','total','checkedAt']) && newData.child('teacherUid').val() == $teacherUid && newData.child('present').isNumber() && newData.child('total').isNumber() && newData.child('present').val() >= 0 && newData.child('present').val() <= newData.child('total').val()"
         }
       }
@@ -107,7 +107,7 @@
       ".read": "auth != null",
       "$session": {
         "$class": {
-          ".write": "auth != null && newData.exists() && (root.child('users').child(auth.uid).child('role').val() == 'teacher' || root.child('users').child(auth.uid).child('role').val() == 'admin') && newData.child('teacherUid').val() == auth.uid",
+          ".write": "auth != null && newData.exists() && (root.child('users').child(auth.uid).child('role').val() == 'teacher' || root.child('users').child(auth.uid).child('role').val() == 'admin') && newData.child('teacherUid').val() == auth.uid && (root.child('users').child(auth.uid).child('role').val() == 'admin' || root.child('users').child(auth.uid).child('isTestAccount').val() == true || ($session.matches(/.*_morning$/) && ((now / 60000 + 420) % 1440) >= 420 && ((now / 60000 + 420) % 1440) < 640) || ($session.matches(/.*_afternoon$/) && ((now / 60000 + 420) % 1440) >= 790 && ((now / 60000 + 420) % 1440) < 1020))",
           ".validate": "$session.matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}_(morning|afternoon)$/) && $class.matches(/^[6-9]A[1-9][0-9]*$/) && newData.hasChildren(['teacherUid','teacherName','className','present','total','checkedAt','revision','updatedAt']) && newData.child('teacherName').val() == root.child('users').child(auth.uid).child('name').val() && newData.child('className').val() == $class && newData.child('present').isNumber() && newData.child('total').isNumber() && newData.child('total').val() > 0 && newData.child('present').val() >= 0 && newData.child('present').val() <= newData.child('total').val() && newData.child('checkedAt').isString() && newData.child('revision').isString() && newData.child('revision').val().length > 0 && newData.child('revision').val().length <= 128 && newData.child('updatedAt').isNumber() && newData.child('updatedAt').val() <= now + 10000"
         }
       }

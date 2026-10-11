@@ -1,13 +1,14 @@
 import { CommonModule } from '@angular/common';
 import { TeacherNotifications } from './teacher-notifications';
 import { environment } from '../environments/environment';
-import { Component, computed, inject, signal, OnInit, OnDestroy, HostListener } from '@angular/core';
+import { Component, computed, inject, signal, OnInit, OnDestroy, HostListener, NgZone } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import * as XLSX from 'xlsx-js-style';
 import { getApp } from 'firebase/app';
 import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, User } from 'firebase/auth';
 import { getDatabase, ref, onValue, get, push, runTransaction } from 'firebase/database';
 import { AbsenteeDetail, AttendanceRecord, attendanceClassKey, attendanceVersion, findClassRecord, mergeAttendanceRecords, canSaveAttendance } from './attendance-record';
+import { ATTENDANCE_WINDOWS, attendanceTimeStatus } from './attendance-time';
 import { NotificationService } from './notification.service';
 import { Capacitor } from '@capacitor/core';
 import { app as firebaseApp } from '../firebase'; // Đảm bảo Firebase được import để chạy initializeApp() trước
@@ -54,6 +55,7 @@ interface ChatMessage {
 export class App implements OnInit, OnDestroy {
   protected readonly notificationDemo = ['localhost', '127.0.0.1'].includes(location.hostname) && new URLSearchParams(location.search).get('demo') === 'notifications';
   protected readonly notificationSvc = inject(NotificationService);
+  private readonly zone = inject(NgZone);
   
   // Trạng thái chung
   protected readonly today = new Intl.DateTimeFormat('vi-VN', { dateStyle: 'full' }).format(new Date());
@@ -69,6 +71,9 @@ export class App implements OnInit, OnDestroy {
 
   protected readonly activeRole = signal<Role>('teacher');
   protected readonly selectedSession = signal<'morning' | 'afternoon'>('morning');
+  protected readonly attendanceWindows = ATTENDANCE_WINDOWS;
+  private readonly attendanceClock = signal(Date.now());
+  private attendanceClockTimer?: ReturnType<typeof setInterval>;
   protected readonly loggedIn = signal(false);
   protected readonly showLogin = signal(true);
   protected readonly loginError = signal('');
@@ -240,9 +245,17 @@ export class App implements OnInit, OnDestroy {
   ]);
 
   ngOnInit() {
+    this.zone.runOutsideAngular(() => {
+      this.attendanceClockTimer = setInterval(() => {
+        const now = Date.now();
+        if (Math.floor(now / 60000) !== Math.floor(this.attendanceClock() / 60000)) {
+          this.zone.run(() => this.attendanceClock.set(now));
+        }
+      }, 1000);
+    });
     if (this.notificationDemo) { this.loading.set(false); return; }
     // Tự động chọn phiên dựa trên giờ hiện tại
-    const currentHour = new Date().getHours();
+    const currentHour = (new Date().getUTCHours() + 7) % 24;
     this.selectedSession.set(currentHour < 12 ? 'morning' : 'afternoon');
 
     // Đọc thông tin đăng nhập đã lưu (nếu user chọn "Ghi nhớ mật khẩu")
@@ -329,6 +342,7 @@ export class App implements OnInit, OnDestroy {
   }
 
   ngOnDestroy() {
+    if (this.attendanceClockTimer) clearInterval(this.attendanceClockTimer);
     this.clearListeners();
     if (this.cooldownInterval) {
       clearInterval(this.cooldownInterval);
@@ -349,37 +363,9 @@ export class App implements OnInit, OnDestroy {
   }
 
   protected getTimeStatus(session: 'morning' | 'afternoon'): { allowed: boolean; message: string } {
-    // Tài khoản test không bị ràng buộc thời gian điểm danh
-    if (this.currentUserProfile()?.isTestAccount) {
-      return { allowed: true, message: 'Tài khoản test: không giới hạn thời gian điểm danh.' };
-    }
-
-    const now = new Date();
-    const hours = now.getHours();
-    const minutes = now.getMinutes();
-    const currentMinutes = hours * 60 + minutes;
-
-    if (session === 'morning') {
-      const start = 6 * 60 + 50; // 06:50
-      const end = 8 * 60;       // 08:00
-      if (currentMinutes < start) {
-        return { allowed: false, message: 'Chưa đến giờ điểm danh buổi sáng (chỉ mở từ 06:50 đến 08:00).' };
-      }
-      if (currentMinutes > end) {
-        return { allowed: false, message: 'Đã hết giờ điểm danh buổi sáng (hạn chót là 08:00).' };
-      }
-      return { allowed: true, message: 'Trong khung giờ điểm danh buổi sáng (06:50 - 08:00).' };
-    } else {
-      const start = 13 * 60 + 10; // 13:10 (01:10 PM)
-      const end = 14 * 60;        // 14:00 (02:00 PM)
-      if (currentMinutes < start) {
-        return { allowed: false, message: 'Chưa đến giờ điểm danh buổi chiều (chỉ mở từ 13:10 đến 14:00).' };
-      }
-      if (currentMinutes > end) {
-        return { allowed: false, message: 'Đã hết giờ điểm danh buổi chiều (hạn chót là 14:00).' };
-      }
-      return { allowed: true, message: 'Trong khung giờ điểm danh buổi chiều (13:10 - 14:00).' };
-    }
+    // Refresh the open page automatically; always recheck the exact time when saving.
+    this.attendanceClock();
+    return attendanceTimeStatus(session, new Date(), !!this.currentUserProfile()?.isTestAccount);
   }
 
   protected updateSelectedDate(type: 'day' | 'month' | 'year', value: string) {
