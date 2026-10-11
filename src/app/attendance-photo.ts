@@ -6,12 +6,16 @@ import { AttendancePhotoData, AttendancePhotoService, BoardAttendance } from './
   template: `
     <section class="photo-card" aria-label="Nhập điểm danh từ ảnh">
       <strong>Chụp ảnh bảng điểm danh</strong>
-      <p>Chụp rõ tên lớp, sĩ số và danh sách học sinh vắng. Ảnh được gửi đến Google Gemini khi thầy cô nhấn Đọc ảnh.</p>
+      @if (demo) { <p>Dùng ảnh bảng mẫu để xem thao tác tự điền thông tin. Kết quả trong bản demo là dữ liệu mô phỏng.</p> }
+      @else { <p>Chụp rõ tên lớp, sĩ số và danh sách học sinh vắng. Ảnh được gửi đến Google Gemini khi thầy cô nhấn Đọc ảnh.</p> }
       <input #camera hidden type="file" accept="image/jpeg,image/png,image/webp" capture="environment" (change)="choosePhoto($event)">
       <input #gallery hidden type="file" accept="image/jpeg,image/png,image/webp" (change)="choosePhoto($event)">
       <div class="photo-actions">
+        @if (demo) { <button type="button" [disabled]="busy()" (click)="useDemoImage()">📷 Dùng ảnh mẫu</button> }
+        @else {
         <button type="button" [disabled]="disabled || busy()" (click)="camera.click()">📷 Chụp ảnh</button>
         <button type="button" [disabled]="disabled || busy()" (click)="gallery.click()">Chọn ảnh</button>
+        }
       </div>
       @if (photo(); as selected) {
         <img [src]="selected.preview" alt="Ảnh bảng điểm danh đã chọn">
@@ -35,6 +39,7 @@ import { AttendancePhotoData, AttendancePhotoService, BoardAttendance } from './
 })
 export class AttendancePhoto implements OnDestroy {
   @Input() disabled = false;
+  @Input() demo = false;
   @Output() recognized = new EventEmitter<BoardAttendance>();
   @Output() busyChange = new EventEmitter<boolean>();
   protected readonly service = inject(AttendancePhotoService);
@@ -43,6 +48,18 @@ export class AttendancePhoto implements OnDestroy {
   protected readonly notice = signal('');
   protected readonly error = signal(false);
   private destroyed = false;
+
+  async useDemoImage() {
+    if (!this.demo || this.busy()) return;
+    this.setBusy(true); this.error.set(false);
+    try {
+      const response = await fetch('/attendance-board-demo.jpg');
+      if (!response.ok) throw { code: 'invalid-image' };
+      const photo = await this.service.prepare(new File([await response.blob()], 'bang-diem-danh-mau.jpg', { type: 'image/jpeg' }));
+      if (!this.destroyed) { this.photo.set(photo); this.notice.set('Ảnh mẫu đã sẵn sàng. Nhấn Đọc ảnh để xem thông tin được điền.'); }
+    } catch (error) { this.showError(error); }
+    finally { this.setBusy(false); }
+  }
 
   async choosePhoto(event: Event) {
     const input = event.target as HTMLInputElement;
@@ -57,12 +74,18 @@ export class AttendancePhoto implements OnDestroy {
   async readPhoto() {
     const photo = this.photo();
     if (!photo || this.disabled || this.busy()) return;
-    this.setBusy(true); this.error.set(false); this.notice.set('Gemini đang đọc bảng điểm danh…');
+    this.setBusy(true); this.error.set(false); this.notice.set(this.demo ? 'Đang mô phỏng đọc ảnh mẫu…' : 'Gemini đang đọc bảng điểm danh…');
     try {
-      const result = await this.service.recognize(photo);
+      const result = this.demo ? await this.demoResult() : await this.service.recognize(photo);
       if (!this.destroyed) { this.recognized.emit(result); this.notice.set('Đã điền dữ liệu đọc được. Thầy cô kiểm tra và bổ sung trước khi lưu.'); }
     } catch (error) { this.showError(error); }
     finally { this.setBusy(false); }
+  }
+
+  private async demoResult(): Promise<BoardAttendance> {
+    await new Promise(resolve => setTimeout(resolve, 650));
+    return { className: '6A1', total: 35, present: 33, absentCount: 2,
+      absentees: [{ name: 'Hoc sinh A', status: 'Có phép' }, { name: 'Hoc sinh B', status: 'Không phép' }], warnings: [] };
   }
 
   clearPhoto() { this.photo.set(null); this.notice.set(''); this.error.set(false); }

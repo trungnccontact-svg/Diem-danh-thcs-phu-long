@@ -10,6 +10,7 @@ import { getDatabase, ref, onValue, get, push, runTransaction } from 'firebase/d
 import { AbsenteeDetail, AttendanceRecord, attendanceClassKey, attendanceVersion, findClassRecord, mergeAttendanceRecords, canSaveAttendance } from './attendance-record';
 import { ATTENDANCE_WINDOWS, attendanceTimeStatus } from './attendance-time';
 import { AttendancePhoto } from './attendance-photo';
+import { AttendancePhotoDemo } from './attendance-photo-demo';
 import { BoardAttendance } from './attendance-photo.service';
 import { NotificationService } from './notification.service';
 import { Capacitor } from '@capacitor/core';
@@ -50,12 +51,13 @@ interface ChatMessage {
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [CommonModule, FormsModule, TeacherNotifications, AttendancePhoto],
+  imports: [CommonModule, FormsModule, TeacherNotifications, AttendancePhoto, AttendancePhotoDemo],
   templateUrl: './app.html',
   styleUrl: './app.scss'
 })
 export class App implements OnInit, OnDestroy {
   protected readonly notificationDemo = ['localhost', '127.0.0.1'].includes(location.hostname) && new URLSearchParams(location.search).get('demo') === 'notifications';
+  protected readonly attendancePhotoDemo = new URLSearchParams(location.search).get('demo') === 'attendance-photo';
   protected readonly notificationSvc = inject(NotificationService);
   private readonly zone = inject(NgZone);
   
@@ -257,7 +259,7 @@ export class App implements OnInit, OnDestroy {
         }
       }, 1000);
     });
-    if (this.notificationDemo) { this.loading.set(false); return; }
+    if (this.notificationDemo || this.attendancePhotoDemo) { this.loading.set(false); return; }
     // Tự động chọn phiên dựa trên giờ hiện tại
     const currentHour = (new Date().getUTCHours() + 7) % 24;
     this.selectedSession.set(currentHour < 12 ? 'morning' : 'afternoon');

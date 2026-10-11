@@ -2,6 +2,12 @@
 
 Giáo viên chọn **Chụp ảnh** hoặc **Chọn ảnh**, xem ảnh rồi nhấn **Đọc ảnh và điền thông tin**. Kết quả chỉ điền biểu mẫu; giáo viên kiểm tra, bổ sung tên/trạng thái chưa rõ và nhấn Lưu. Khung giờ điểm danh và việc xem lại lớp đã được giáo viên khác điểm danh vẫn được áp dụng.
 
+## Xem demo
+
+Mở `/?demo=attendance-photo`, chọn **Dùng ảnh mẫu** rồi **Đọc ảnh và điền thông tin**. Demo không cần đăng nhập, sử dụng kết quả mô phỏng và không tạo yêu cầu Gemini hay ghi dữ liệu điểm danh lên Firebase. Tài khoản admin có liên kết **Xem demo chụp ảnh bảng điểm danh** ở bảng điều hành.
+
+Nút chụp thật thuộc biểu mẫu giáo viên. Khi giáo viên đã nộp điểm danh, chọn **Chỉnh sửa điểm danh** để mở lại biểu mẫu. Ngoài khung giờ quy định, biểu mẫu bị khóa; tài khoản thử nghiệm vẫn có thể dùng.
+
 ## Chạy dịch vụ
 
 Thêm `GEMINI_API_KEY` vào file `.env` ở thư mục gốc. File được Git bỏ qua. Có thể đặt `GEMINI_MODEL` để chọn model; mặc định `gemini-3.8-flash`. Khóa được đọc bởi backend, không nằm trong mã web.

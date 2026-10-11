@@ -20,6 +20,18 @@ describe('Đọc ảnh bảng điểm danh', () => {
     expect(fixture.nativeElement.textContent).toContain('Đọc ảnh và điền thông tin');
     expect(input.value).toBe('');
   });
+
+  it('uses sample results in demo mode without uploading to Gemini or Firebase', async () => {
+    const service = { recognize: jasmine.createSpy() };
+    await TestBed.configureTestingModule({ imports: [AttendancePhoto], providers: [{ provide: AttendancePhotoService, useValue: service }] }).compileComponents();
+    const component = TestBed.createComponent(AttendancePhoto).componentInstance as any;
+    component.demo = true;
+    component.photo.set({ image: 'sample', mimeType: 'image/jpeg', preview: 'sample' });
+    const result = jasmine.createSpy('result'); component.recognized.subscribe(result);
+    await component.readPhoto();
+    expect(service.recognize).not.toHaveBeenCalled();
+    expect(result).toHaveBeenCalledWith(jasmine.objectContaining({ className: '6A1', present: 33, total: 35, absentCount: 2 }));
+  });
 });
 
 describe('Điền biểu mẫu từ kết quả Gemini', () => {
