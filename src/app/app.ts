@@ -1,3 +1,4 @@
+import { AppUpdateService } from './app-update.service';
 import { CommonModule } from '@angular/common';
 import { TeacherNotifications } from './teacher-notifications';
 import { environment } from '../environments/environment';
@@ -56,8 +57,10 @@ interface ChatMessage {
   styleUrl: './app.scss'
 })
 export class App implements OnInit, OnDestroy {
+  protected readonly schoolAttendanceDemo = ['localhost', '127.0.0.1'].includes(location.hostname) && new URLSearchParams(location.search).get('demo') === 'school-attendance';
   protected readonly notificationDemo = ['localhost', '127.0.0.1'].includes(location.hostname) && new URLSearchParams(location.search).get('demo') === 'notifications';
   protected readonly attendancePhotoDemo = new URLSearchParams(location.search).get('demo') === 'attendance-photo';
+  protected readonly appUpdate = inject(AppUpdateService);
   protected readonly notificationSvc = inject(NotificationService);
   private readonly zone = inject(NgZone);
   
@@ -85,7 +88,10 @@ export class App implements OnInit, OnDestroy {
   protected readonly mobileMenuOpen = signal(false);
 
   protected navigateTo(section: string) {
+    if (this.attendanceSaving() || this.attendancePhotoBusy()) return;
+    if (this.schoolAttendanceDemo && !['Tổng quan', 'Điểm danh', 'Toàn trường'].includes(section)) return;
     this.selectedNav.set(section);
+    if (this.loggedIn()) this.setupRealtimeSync();
     this.closeMobileMenu();
   }
 
@@ -148,6 +154,13 @@ export class App implements OnInit, OnDestroy {
 
   // Dữ liệu đồng bộ
   protected readonly dbTeachers = signal<TeacherData[]>([]);
+  protected readonly schoolView = computed(() => this.activeRole() === 'teacher' && this.selectedNav() === 'Toàn trường');
+  protected readonly schoolRecords = signal<AttendanceRecord[]>([]);
+  protected readonly schoolRows = computed(() => this.schoolRecords()
+    .filter(r => this.adminGradeFilter() === 'Tất cả' || r.className.startsWith(this.adminGradeFilter()))
+    .sort((a, b) => this.compareClassNames(a.className, b.className)));
+  protected readonly schoolAbsent = computed(() => this.schoolRecords().reduce((sum, r) => sum + r.total - r.present, 0));
+
   protected readonly dbAttendance = signal<Record<string, AttendanceRecord>>({});
 
   // Bộ lọc admin theo khối lớp
@@ -250,7 +263,17 @@ export class App implements OnInit, OnDestroy {
     { from: 'assistant', text: 'Chào thầy cô. Tôi là Trợ lý Phú Long hỗ trợ theo dõi điểm danh lớp học.' }
   ]);
 
+  @HostListener('window:focus')
+  @HostListener('window:online')
+  protected checkAppUpdate() { void this.appUpdate.check(); }
+
+  protected applyAppUpdate() {
+    if (this.attendanceSaving() || this.attendancePhotoBusy()) return;
+    void this.appUpdate.apply();
+  }
+
   ngOnInit() {
+    void this.appUpdate.check();
     this.zone.runOutsideAngular(() => {
       this.attendanceClockTimer = setInterval(() => {
         const now = Date.now();
@@ -259,6 +282,15 @@ export class App implements OnInit, OnDestroy {
         }
       }, 1000);
     });
+    if (this.schoolAttendanceDemo) {
+      this.currentUserProfile.set({ uid: 'demo-0', name: 'Giáo viên xem thử', phone: '', email: '', role: 'teacher' });
+      this.activeRole.set('teacher');
+      this.selectedNav.set('Tổng quan');
+      this.loggedIn.set(true);
+      this.loading.set(false);
+      this.setupRealtimeSync();
+      return;
+    }
     if (this.notificationDemo || this.attendancePhotoDemo) { this.loading.set(false); return; }
     // Tự động chọn phiên dựa trên giờ hiện tại
     const currentHour = (new Date().getUTCHours() + 7) % 24;
@@ -383,6 +415,24 @@ export class App implements OnInit, OnDestroy {
   }
 
   private setupRealtimeSync() {
+    if (this.schoolAttendanceDemo) {
+      const classes = this.selectedSession() === 'morning' ? ['6A1', '6A2', '7A1', '7A3', '8A2', '9A1'] : ['6A1', '7A1', '8A2'];
+      const isToday = this.selectedDateStr() === this.todayStr;
+      this.schoolRecords.set(isToday ? classes.map((className, i) => ({
+        teacherUid: 'demo-' + (i % 3), teacherName: ['Nguyễn Thị Mai (mẫu)', 'Trần Văn An (mẫu)', 'Lê Thị Lan (mẫu)'][i % 3],
+        className, total: 40, present: i % 3 === 0 ? 40 : 38,
+        absentNames: i % 3 === 0 ? [] : ['Học sinh mẫu A', 'Học sinh mẫu B'],
+        absentees: i % 3 === 0 ? [] : [{ name: 'Học sinh mẫu A', status: 'Có phép' as const }, { name: 'Học sinh mẫu B', status: 'Không phép' as const }],
+        checkedAt: this.selectedSession() === 'morning' ? '07:15' : '13:25'
+      })) : []);
+      const myRecord: AttendanceRecord = { teacherUid: 'demo-0', teacherName: 'Giáo viên xem thử', className: '6A1', total: 40, present: 40, absentNames: [], absentees: [], checkedAt: this.selectedSession() === 'morning' ? '07:15' : '13:25' };
+      this.dbAttendance.set({ 'demo-0': myRecord });
+      if (!this.schoolView()) {
+        this.loadAttendanceForm(myRecord);
+        this.submitted.set(true);
+      }
+      return;
+    }
     this.clearListeners();
 
     // 1. Đồng bộ danh sách tất cả giáo viên (chỉ lấy role teacher để hiển thị tại admin)
@@ -418,9 +468,10 @@ export class App implements OnInit, OnDestroy {
 
     // 2. Đồng bộ kết quả điểm danh của ngày hôm nay theo phiên
     const sessionSuffix = this.selectedSession();
-    const date = this.activeRole() === 'teacher' ? this.todayStr : this.selectedDateStr();
+    const date = this.activeRole() === 'teacher' && !this.schoolView() ? this.todayStr : this.selectedDateStr();
     const attPath = `attendance/${date}_${sessionSuffix}`;
     const classPath = `classAttendance/${date}_${sessionSuffix}`;
+    this.schoolRecords.set([]);
     this.legacyAttendance = {};
     this.classAttendance = {};
     let legacyLoaded = false;
@@ -429,8 +480,16 @@ export class App implements OnInit, OnDestroy {
       if (!legacyLoaded || !classesLoaded) return;
       const records = mergeAttendanceRecords(this.legacyAttendance, this.classAttendance);
       this.dbAttendance.set(records);
+      const byClass = new Map<string, AttendanceRecord>();
+      for (const record of Object.values(this.legacyAttendance)) {
+        const key = attendanceClassKey(record.className);
+        const latest = findClassRecord(this.legacyAttendance, key);
+        if (latest) byClass.set(key, latest);
+      }
+      for (const record of Object.values(this.classAttendance)) byClass.set(attendanceClassKey(record.className), record);
+      this.schoolRecords.set([...byClass.values()]);
       const profile = this.currentUserProfile();
-      if (profile?.role === 'teacher' && !this.attendanceEditing() && !this.attendanceSaving()) {
+      if (profile?.role === 'teacher' && !this.schoolView() && !this.attendanceEditing() && !this.attendanceSaving()) {
         const myRecord = records[profile.uid];
         if (myRecord) this.loadAttendanceForm(myRecord);
         this.submitted.set(!!myRecord);
@@ -485,7 +544,7 @@ export class App implements OnInit, OnDestroy {
   }
 
   protected editClassAttendance(record = this.duplicateAttendance) {
-    if (!record || this.attendanceSaving() || !this.getTimeStatus(this.selectedSession()).allowed) return;
+    if (this.schoolAttendanceDemo || this.schoolView() || !record || this.attendanceSaving() || !this.getTimeStatus(this.selectedSession()).allowed) return;
     this.loadAttendanceForm(record);
     this.reviewedAttendance = { classKey: attendanceClassKey(record.className), version: attendanceVersion(record) };
     this.attendanceEditing.set(true);
@@ -623,6 +682,7 @@ export class App implements OnInit, OnDestroy {
   }
 
   async logout() {
+    if (this.schoolAttendanceDemo) { location.assign('/'); return; }
     this.loading.set(true);
     await this.notificationSvc.disconnect();
     await signOut(this.auth);
@@ -686,7 +746,7 @@ export class App implements OnInit, OnDestroy {
 
   async submitAttendance() {
     const profile = this.currentUserProfile();
-    if (!profile || this.attendanceSaving() || this.attendancePhotoBusy()) return;
+    if (this.schoolAttendanceDemo || this.schoolView() || !profile || this.attendanceSaving() || this.attendancePhotoBusy()) return;
 
     const timeCheck = this.getTimeStatus(this.selectedSession());
     if (!timeCheck.allowed) {

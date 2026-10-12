@@ -560,7 +560,12 @@ td { border-top:1px solid #eef1f4; padding:13px 16px; font-size:11px; color:#526
   .mobile-menu-toggle { display:flex; align-items:center; justify-content:center; width:44px; height:44px; border:1px solid #dce6ed; border-radius:10px; background:#fff; color:#087f83; font-size:24px; cursor:pointer; margin-right:8px; flex-shrink:0; }
   .mobile-menu-toggle:focus-visible, .mobile-menu-close:focus-visible { outline:2px solid #087f83; outline-offset:3px; }
   .sidebar { display:none; }
-  .sidebar.mobile-open { display:flex; width:100%; box-sizing:border-box; padding:12px 16px 16px; border-right:0; border-bottom:1px solid #dce6ed; }
+  .sidebar.mobile-open {
+    display:flex; position:fixed; top:60px; bottom:0; left:0; right:0;
+    z-index:16; width:100%; box-sizing:border-box; padding:12px 16px 16px;
+    overflow-y:auto; overscroll-behavior:contain; -webkit-overflow-scrolling:touch;
+    border-right:0; border-bottom:1px solid #dce6ed;
+  }
   .mobile-menu-close { display:block; align-self:flex-end; padding:10px 12px; border:0; border-radius:8px; background:#eaf8f7; color:#087f83; cursor:pointer; }
   .sidebar.mobile-open .school-mini > div { display:block; }
   .sidebar.mobile-open .nav-caption { display:block; }
